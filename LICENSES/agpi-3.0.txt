@@ -1,0 +1,11 @@
+GNU AFFERO GENERAL PUBLIC LICENSE
+Version 3, 19 November 2007
+
+Used by: essentia
+
+Full licence text available at: https://www.gnu.org/licenses/agpl-3.0.txt
+
+Note: This licence applies to essentia only. The klf-manual-analyser tool
+itself is MIT licensed. AGPL terms apply to essentia as a library dependency.
+For local CLI use (no network service), AGPL imposes no additional obligations
+beyond those of MIT. See docs/DESIGN.md for full rationale.

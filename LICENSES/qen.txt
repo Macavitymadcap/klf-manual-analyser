@@ -1,0 +1,15 @@
+Qwen License Agreement
+
+Used by: qwen2.5:14b model weights (via Ollama)
+
+Full licence text available at:
+https://huggingface.co/Qwen/Qwen2.5-14B/blob/main/LICENSE
+
+Key terms relevant to this project:
+- Non-commercial use: PERMITTED without restriction
+- Research and educational use: PERMITTED without restriction
+- Commercial use: Permitted below 100M monthly active users;
+  above that threshold requires a separate agreement with Alibaba Cloud
+
+Users of this tool must agree to the Qwen licence terms when pulling the
+model via Ollama: `ollama pull qwen2.5:14b`

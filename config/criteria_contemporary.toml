@@ -1,0 +1,289 @@
+[mode]
+name = "contemporary"
+description = """
+  The Manual's structural principles updated for the streaming era.
+  Context: Spotify, Apple Music, TikTok. Skip-button economics.
+  The 30-second paywall. Hook-first song design. Playlist gatekeeping.
+"""
+
+[mode.llm_context]
+system = """
+You are scoring a track against contemporary streaming-era hit-song criteria,
+derived from The Manual's structural principles updated for the 2020s.
+
+The context is the streaming economy: Spotify skip rates, TikTok clip culture,
+playlist placement, the 30-second listener retention threshold. Average pop BPM
+sits at 118–128. Intros are under 10 seconds. Hooks arrive before 30 seconds.
+Song length is falling — under 3 minutes is increasingly common.
+
+Respond ONLY with a JSON object in this exact format:
+{"score": <integer 0-10>, "reasoning": "<one or two sentences>"}
+
+Do not include markdown, preamble, or any text outside the JSON object.
+"""
+
+# ---------------------------------------------------------------------------
+# Criteria
+# ---------------------------------------------------------------------------
+
+[[criterion]]
+id = "bpm"
+name = "Tempo (Genre-Contextual)"
+description = """
+  Contemporary mainstream pop sits at 118–128 BPM. No hard ceiling —
+  tempo should be appropriate for the genre and energy level of the track.
+"""
+weight = 1.0
+db_fields = [
+  "tracks.bpm",
+  "tracks.danceability",
+]
+rule = "llm"
+prompt_hint = """
+  bpm: the track's tempo in beats per minute.
+  danceability: 0.0–1.0 descriptor.
+
+  Contemporary mainstream pop: 118–128 BPM is the sweet spot.
+  Dance-pop and EDM can reach ~150 BPM.
+  Ballad-adjacent tracks (80–100 BPM) can chart but need very strong hooks
+  to compensate for lower energy.
+
+  Evaluate whether the BPM is appropriate for the apparent genre and feel.
+  Score 0-10.
+"""
+
+# ---------------------------------------------------------------------------
+
+[[criterion]]
+id = "duration"
+name = "Track Length"
+description = """
+  Average chart hit has fallen to approximately 3 minutes. Songs over 3'30\"
+  risk playlist removal and skip penalties on streaming platforms.
+"""
+weight = 1.0
+db_field = "tracks.duration"
+rule = "lte"
+threshold = 210
+unit = "seconds"
+fail_message = "Track exceeds 3'30\". Streaming playlists prefer concision."
+
+# ---------------------------------------------------------------------------
+
+[[criterion]]
+id = "groove"
+name = "Continuous Dance Groove"
+description = """
+  A consistent groove must run through the record. Still the most fundamental
+  structural requirement — streaming algorithms reward tracks that listeners
+  play to completion.
+"""
+weight = 2.0
+db_fields = [
+  "tracks.self_similarity_score",
+  "tracks.beat_regularity",
+  "tracks.danceability",
+  "tracks.groove_consistency",
+]
+rule = "llm"
+prompt_hint = """
+  self_similarity_score: how consistently the sonic texture recurs (0.0–1.0).
+  beat_regularity: how metronomic the groove is (0.0–1.0).
+  danceability: 0.0–1.0 descriptor.
+  groove_consistency: composite of the above (0.0–1.0).
+
+  In the streaming era, listeners skip tracks that lose momentum or feel
+  inconsistent. A track with high self_similarity and beat_regularity is more
+  likely to be played to completion and returned to.
+
+  Score 0-10. High score = irresistible, consistent groove throughout.
+"""
+
+# ---------------------------------------------------------------------------
+
+[[criterion]]
+id = "hook_timing"
+name = "Hook Arrival Time"
+description = """
+  The hook or chorus must arrive within 30 seconds. Research shows 25% of
+  streaming listeners skip before the 30-second mark. Song title should
+  appear in the first minute.
+"""
+weight = 1.5
+db_field = "tracks.hook_first_appearance"
+rule = "lte"
+threshold = 30
+unit = "seconds"
+fail_message = "Hook arrives after 30 seconds. Streaming listeners have already skipped."
+
+# ---------------------------------------------------------------------------
+
+[[criterion]]
+id = "structure"
+name = "Song Structure (Streaming-Era)"
+description = """
+  Traditional verse-chorus form is compressed or replaced. Hook must arrive
+  before 30 seconds. Intro under 10 seconds. Bridge and breakdown are optional.
+  Hook-hook-hook structures are increasingly standard.
+"""
+weight = 1.5
+db_field = "sections.label"
+rule = "llm"
+prompt_hint = """
+  You are given an ordered list of section labels with confidence scores.
+  Low-confidence labels (below 0.5) are less reliable — note them.
+
+  Contemporary streaming-era structure priorities:
+  1. Does the hook or chorus arrive within the first 30 seconds?
+  2. Is the intro under ~10 seconds?
+  3. Is the track concise — no extended hookless sections?
+  4. Does it avoid long outros, extended breakdowns, or lengthy pre-hook buildups?
+
+  Key differences from 1988: absence of a breakdown is NOT a failing.
+  Absence of a double chorus is NOT a failing.
+  Presence of a pre_chorus is a positive signal.
+  A hook-hook-hook structure with minimal verse is valid and increasingly common.
+
+  Score 0-10.
+"""
+
+# ---------------------------------------------------------------------------
+
+[[criterion]]
+id = "intro_length"
+name = "Intro Length (Streaming-Era)"
+description = """
+  Contemporary pop intros average approximately 5 seconds. Research confirms
+  listeners skip within 5 seconds on streaming platforms. An intro over 15
+  seconds is a significant commercial risk.
+"""
+weight = 1.0
+db_field = "sections.duration"
+rule = "lte"
+threshold = 15
+unit = "seconds"
+fail_message = "Intro exceeds 15 seconds. Streaming listeners will skip before the hook."
+
+# ---------------------------------------------------------------------------
+
+[[criterion]]
+id = "chorus_hook"
+name = "Irresistible Chorus and Title Hook"
+description = """
+  The chorus must be the part people share as a clip, add to playlists, and
+  return to. Simple, emotionally direct, compulsively repeatable.
+"""
+weight = 2.0
+db_fields = [
+  "tracks.hook_phrase",
+  "tracks.hook_repetition_count",
+  "tracks.hook_first_appearance",
+  "tracks.song_name",
+]
+rule = "llm"
+prompt_hint = """
+  hook_phrase: the most repeated phrase in the track.
+  hook_repetition_count: how many times it appears.
+  hook_first_appearance: seconds into the track.
+  song_name: parsed from the filename.
+
+  In the streaming era, the hook must:
+  1. Be immediately shareable — the kind of phrase that becomes a TikTok audio.
+  2. Be emotionally legible to a first-time listener in under 5 seconds.
+  3. Contain or clearly relate to the song title.
+  4. Be repeated enough to be stuck in the head after one partial listen.
+
+  Score 0-10.
+"""
+
+# ---------------------------------------------------------------------------
+
+[[criterion]]
+id = "lyrics_economy"
+name = "Lyric Economy and Repetition"
+description = """
+  Streaming listeners reward concise, repeatable lyrics. Low unique_word_ratio
+  is a positive signal — TikTok has amplified the value of short, hook-dense
+  lyric writing.
+"""
+weight = 1.0
+db_field = "tracks.unique_word_ratio"
+rule = "llm"
+prompt_hint = """
+  unique_word_ratio: proportion of unique words to total words (0.0–1.0).
+  Low ratio (e.g. 0.2–0.3) = heavy repetition = positive in this context.
+
+  Consider whether the lyric content is emotionally accessible and simple.
+  Complexity is not rewarded in contemporary streaming pop.
+
+  Score 0-10. High score = economical, repeatable, emotionally direct.
+"""
+
+# ---------------------------------------------------------------------------
+
+[[criterion]]
+id = "verse_bass_riff"
+name = "Verse Drive"
+description = """
+  Verses must maintain momentum between hooks. In contemporary production
+  this may be a bass riff, a rhythmic vocal chop, or a production motif —
+  anything that propels the track forward without the hook.
+"""
+weight = 1.0
+db_fields = [
+  "sections.label",
+  "chord_progressions.progression",
+  "beat_patterns.kick_pattern",
+]
+rule = "llm"
+prompt_hint = """
+  You are given chord progressions for verse sections and the kick/bass pattern.
+  Evaluate whether the verse sections maintain momentum and forward drive.
+  In contemporary production this may be a bass riff, a rhythmic production
+  element, or a vocal hook — not necessarily a traditional bass line.
+
+  Note: chord detection is approximately 70–75% accurate. Treat as approximate.
+
+  Score 0-10.
+"""
+
+# ---------------------------------------------------------------------------
+
+[[criterion]]
+id = "chorus_energy"
+name = "Chorus Energy Lift"
+description = "The chorus must hit harder than the verse. The lift must be felt."
+weight = 0.75
+db_field = "tracks.verse_chorus_delta"
+rule = "gte"
+threshold = 0.15
+fail_message = "Insufficient energy difference between verse and chorus (below ~3dB)."
+
+# ---------------------------------------------------------------------------
+
+[[criterion]]
+id = "keys_harmony"
+name = "Harmonic Accessibility"
+description = """
+  Contemporary pop rewards simple, emotionally direct harmony. Complexity
+  is not commercially valuable in this context.
+"""
+weight = 0.75
+db_fields = [
+  "tracks.key",
+  "tracks.mode",
+  "tracks.key_confidence",
+  "chord_progressions.progression",
+]
+rule = "llm"
+prompt_hint = """
+  You are given the key, mode, and chord progressions per section.
+  Note: chord detection is approximately 70–75% accurate.
+
+  Contemporary pop harmony trends: I-V-vi-IV and similar 4-chord progressions
+  dominate. Minor keys are common and commercially viable. Modal chord
+  progressions (e.g. bVII) appear in indie-adjacent pop.
+
+  Evaluate whether the harmony is accessible and appropriate for a contemporary
+  pop context. Score 0-10.
+"""

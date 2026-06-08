@@ -1,0 +1,303 @@
+[mode]
+name = "1988"
+description = """
+  The KLF's Manual Golden Rules applied literally.
+  Context: UK singles market, late 1988. Gallup chart. 7\" single format.
+  Radio One daytime DJs. Top of the Pops. Stock Aitken Waterman dominance.
+"""
+
+# ---------------------------------------------------------------------------
+# System prompt context injected into every LLM scoring call for this mode.
+# ---------------------------------------------------------------------------
+[mode.llm_context]
+system = """
+You are scoring a track against the hit-making criteria from The Manual
+(How To Have A Number One The Easy Way) by The KLF (Bill Drummond and Jimmy
+Cauty), published 1988.
+
+The context is the UK singles market of late 1988: the Gallup chart, the 7\"
+single format, Radio One daytime airplay, Top of the Pops performances, and
+the dominance of Stock Aitken Waterman production. The groove ideal comes from
+rare groove and US black dance music imports.
+
+Respond ONLY with a JSON object in this exact format:
+{"score": <integer 0-10>, "reasoning": "<one or two sentences>"}
+
+Do not include markdown, preamble, or any text outside the JSON object.
+"""
+
+# ---------------------------------------------------------------------------
+# Criteria
+# ---------------------------------------------------------------------------
+
+[[criterion]]
+id = "bpm"
+name = "Tempo Ceiling"
+description = "No song with a BPM over 135 will ever reach Number One."
+weight = 1.5
+db_field = "tracks.bpm"
+rule = "lte"
+threshold = 135
+unit = "BPM"
+fail_message = "BPM exceeds the 135 ceiling. The Manual is clear on this."
+
+# ---------------------------------------------------------------------------
+
+[[criterion]]
+id = "duration"
+name = "Track Length"
+description = """
+  No longer than three minutes thirty seconds. Just under 3'20 is preferable.
+  Longer tracks get faded or talked over by Radio One DJs at the crucial moment
+  the chorus is finally being hammered home.
+"""
+weight = 1.0
+db_field = "tracks.duration"
+rule = "lte"
+threshold = 210
+unit = "seconds"
+fail_message = "Track exceeds 3'30\". Radio One will talk over your outro."
+
+# ---------------------------------------------------------------------------
+
+[[criterion]]
+id = "groove"
+name = "Continuous Dance Groove"
+description = """
+  A single dance groove must run all the way through the record, irresistible
+  to the current 7\" buying generation. The groove is the engine of the record.
+  Without it, nothing else matters.
+"""
+weight = 2.0
+db_fields = [
+  "tracks.self_similarity_score",
+  "tracks.beat_regularity",
+  "tracks.danceability",
+  "tracks.groove_consistency",
+]
+rule = "llm"
+prompt_hint = """
+  self_similarity_score: how consistently the sonic texture recurs (0.0–1.0).
+  beat_regularity: how metronomic the groove is (0.0–1.0).
+  danceability: essentia descriptor or approximation (0.0–1.0).
+  groove_consistency: composite of the above (0.0–1.0).
+
+  A track with high self_similarity and beat_regularity has a groove running
+  relentlessly from start to finish — this is exactly what The Manual demands.
+  A track that shifts feel, breaks the groove, or loses momentum at any point
+  violates the first and most important Golden Rule.
+
+  Score 0-10. High score = irresistible, consistent groove throughout.
+"""
+
+# ---------------------------------------------------------------------------
+
+[[criterion]]
+id = "structure"
+name = "Canonical Song Structure"
+description = """
+  intro → verse → chorus → verse → chorus → breakdown → double chorus → outro.
+  Each section in multiples of four bars. The breakdown and double chorus are
+  the most commonly absent elements.
+"""
+weight = 1.5
+db_field = "sections.label"
+rule = "llm"
+prompt_hint = """
+  You are given an ordered list of section labels with confidence scores,
+  derived by cross-referencing acoustic segmentation with lyric timestamps.
+  Low-confidence labels (below 0.5) are less reliable — note them.
+
+  The canonical Manual structure is:
+    intro → verse → chorus → verse → chorus → breakdown → double_chorus → outro
+
+  The breakdown (a low-energy relief section) and double_chorus (an extended,
+  high-energy final chorus) are the most significant elements — their absence
+  is a meaningful failing.
+
+  Approximate matches are acceptable: a pre_chorus between verse and chorus,
+  or a bridge in place of one verse, should not heavily penalise the score.
+  What matters is whether the track has the shape of a journey with a climax.
+
+  Score 0-10.
+"""
+
+# ---------------------------------------------------------------------------
+
+[[criterion]]
+id = "breakdown"
+name = "Breakdown Section Present"
+description = """
+  The breakdown section must exist. It strips the track back, providing
+  relief before the double chorus explodes back in. Without it, the double
+  chorus has nothing to contrast against.
+"""
+weight = 1.0
+db_field = "sections.label"
+rule = "exists"
+value = "breakdown"
+fail_message = "No breakdown section detected. The Manual requires one."
+
+# ---------------------------------------------------------------------------
+
+[[criterion]]
+id = "double_chorus"
+name = "Double Chorus Present"
+description = """
+  After the breakdown, the double chorus must arrive and land with maximum
+  force. It is the climax of the record — everything has been building to this.
+"""
+weight = 1.0
+db_field = "sections.label"
+rule = "exists"
+value = "double_chorus"
+fail_message = "No double chorus detected. The breakdown leads nowhere."
+
+# ---------------------------------------------------------------------------
+
+[[criterion]]
+id = "chorus_hook"
+name = "Irresistible Chorus and Title Hook"
+description = """
+  The chorus must be the part people carry in their heads after hearing the
+  record once. The song title must appear in the chorus. Chorus lyrics must
+  deal with only the most basic human emotions — nothing complex or clever.
+  The hook must be immediately legible and compulsively repeatable.
+"""
+weight = 2.0
+db_fields = [
+  "tracks.hook_phrase",
+  "tracks.hook_repetition_count",
+  "tracks.hook_first_appearance",
+  "tracks.song_name",
+]
+rule = "llm"
+prompt_hint = """
+  hook_phrase: the most repeated phrase detected in the track.
+  hook_repetition_count: how many times it appears.
+  hook_first_appearance: seconds into the track when it first appears.
+  song_name: parsed from the filename.
+
+  Evaluate:
+  1. Is the hook phrase simple and emotionally direct — not clever, not complex?
+     (Love, loss, joy, longing — the most basic human emotions only.)
+  2. Does the song title appear in the lyrics, ideally in the chorus?
+  3. Is the hook repeated enough times to be genuinely memorable?
+  4. Would this be the part someone hums walking home after one listen?
+
+  Score 0-10.
+"""
+
+# ---------------------------------------------------------------------------
+
+[[criterion]]
+id = "lyrics_economy"
+name = "Lyric Economy and Repetition"
+description = """
+  You will need lyrics, but not many. Low unique_word_ratio signals deliberate
+  repetition — a virtue, not a flaw. The Manual is explicit: chorus lyrics must
+  never deal with anything but the most basic of human emotions.
+"""
+weight = 1.0
+db_field = "tracks.unique_word_ratio"
+rule = "llm"
+prompt_hint = """
+  unique_word_ratio: proportion of unique words to total words (0.0–1.0).
+  Low ratio (e.g. 0.2–0.3) = heavy repetition = positive signal in this context.
+
+  Also consider whether the lyric content (where transcription is reliable)
+  deals with basic emotions (love, loss, joy, longing) rather than complex or
+  cerebral themes. The Manual explicitly forbids intellectual content in choruses.
+
+  Score 0-10. High score = economical, emotionally direct, deliberately repetitive.
+"""
+
+# ---------------------------------------------------------------------------
+
+[[criterion]]
+id = "verse_bass_riff"
+name = "Verse Bass Riff Factor"
+description = """
+  The verse must be propelled by a bass riff — as important as the groove
+  itself for carrying the listener between choruses and maintaining momentum.
+"""
+weight = 1.0
+db_fields = [
+  "sections.label",
+  "chord_progressions.progression",
+  "beat_patterns.kick_pattern",
+]
+rule = "llm"
+prompt_hint = """
+  You are given chord progressions for verse sections and the kick/bass
+  beat pattern. Evaluate whether the verse sections appear to be driven by
+  a repeating, identifiable bass riff that provides momentum between choruses.
+
+  Note: automatic chord detection is approximately 70–75% accurate on modern
+  recordings and lower on older material. Treat chord data as approximate.
+
+  Score 0-10. High score = clear, driving bass riff in the verse sections.
+"""
+
+# ---------------------------------------------------------------------------
+
+[[criterion]]
+id = "intro_length"
+name = "Intro Length"
+description = """
+  Late-1980s pop intros averaged approximately 20 seconds.
+  The intro must set up the groove without overstaying its welcome.
+  8–30 seconds is the expected range for the era.
+"""
+weight = 0.75
+db_field = "sections.duration"
+rule = "range"
+threshold_min = 8
+threshold_max = 30
+unit = "seconds"
+fail_message = "Intro is outside the expected 8–30 second range for the era."
+
+# ---------------------------------------------------------------------------
+
+[[criterion]]
+id = "chorus_energy"
+name = "Chorus Energy Lift"
+description = """
+  The chorus must hit harder than the verse. The listener must feel the lift
+  when the chorus arrives — a physical, unavoidable uplift.
+"""
+weight = 0.75
+db_field = "tracks.verse_chorus_delta"
+rule = "gte"
+threshold = 0.15
+fail_message = "Insufficient energy difference between verse and chorus (below ~3dB)."
+
+# ---------------------------------------------------------------------------
+
+[[criterion]]
+id = "keys_harmony"
+name = "Harmonic Simplicity"
+description = """
+  The Manual advises staying in accessible keys and avoiding harmonic complexity.
+  Simple chord progressions are a feature, not a limitation.
+"""
+weight = 0.75
+db_fields = [
+  "tracks.key",
+  "tracks.mode",
+  "tracks.key_confidence",
+  "chord_progressions.progression",
+]
+rule = "llm"
+prompt_hint = """
+  You are given the key, mode, and chord progressions per section.
+  Note: automatic chord detection is approximately 70–75% accurate.
+
+  Evaluate harmonic simplicity. The Manual recommends accessible keys and
+  simple I-IV-V or I-V-vi-IV type progressions. Unusual key changes, complex
+  jazz harmonics, or chromatic movement would be red flags.
+
+  A major key with a simple repeating progression is ideal.
+
+  Score 0-10. High score = simple, accessible, pop-appropriate harmony.
+"""

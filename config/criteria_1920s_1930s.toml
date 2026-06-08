@@ -1,0 +1,266 @@
+[mode]
+name = "1920s_1930s"
+description = """
+  Period-appropriate criteria for early jazz, dance band, and Tin Pan Alley
+  recordings. Does not apply Manual criteria — asks equivalent questions for
+  the era. Context: 78rpm shellac singles, Tin Pan Alley, US dance halls,
+  AABA song form, no click tracks, acoustic horn recording technology.
+"""
+
+[mode.llm_context]
+system = """
+You are scoring a track against period-appropriate criteria for early jazz,
+dance band, and Tin Pan Alley popular music of the 1920s–1930s.
+
+The context: 78rpm shellac singles (physical 3-minute limit), Tin Pan Alley
+song publishing, US and UK dance halls, the foxtrot, Charleston, and slow blues
+as dominant dance forms. No click tracks — tempo is elastic. Recording was done
+on a single acoustic microphone into a horn. Chord vocabulary is developing
+from simple I-IV-V toward jazz ii-V-I movement by the late 1920s.
+
+Important notes on accuracy:
+- BPM detection may be imprecise due to natural tempo variation (no click track)
+- Chord detection on mono 1920s recordings is significantly less accurate than
+  on modern recordings (~50–60% vs ~70–75%) — treat chord data with scepticism
+- Whisper transcription accuracy is lower on 1920s recordings due to surface
+  noise, acoustic horn colouration, and period pronunciation
+- Flag uncertainty explicitly when these limitations affect your assessment
+
+Respond ONLY with a JSON object in this exact format:
+{"score": <integer 0-10>, "reasoning": "<one or two sentences>"}
+
+Do not include markdown, preamble, or any text outside the JSON object.
+"""
+
+# ---------------------------------------------------------------------------
+# Criteria
+# ---------------------------------------------------------------------------
+
+[[criterion]]
+id = "bpm_danceform"
+name = "Tempo Appropriate to Dance Form"
+description = """
+  Tempo should match the intended dance form:
+  Foxtrot: 112–136 BPM (4/4, smooth).
+  Charleston: 180–220 BPM (4/4, energetic).
+  Slow blues / ballad: 60–90 BPM (4/4).
+  Waltz: 84–90 BPM (3/4).
+  Out-of-range tempos suggest a track ill-suited to its intended form.
+"""
+weight = 1.5
+db_fields = [
+  "tracks.bpm",
+  "tracks.time_signature",
+  "tracks.groove_feel",
+  "tracks.tempo_stability",
+]
+rule = "llm"
+prompt_hint = """
+  bpm: detected tempo (may be imprecise; no click track on these recordings).
+  time_signature: 3 or 4 (madmom/librosa estimate).
+  groove_feel: "straight", "swung", or "unclear".
+  tempo_stability: 0.0–1.0; low stability is expected and not a failing for the era.
+
+  First, identify the most likely intended dance form:
+  - Foxtrot (4/4, 112–136 BPM, smooth, swung)
+  - Charleston (4/4, 180–220 BPM, angular, energetic)
+  - Slow blues / ballad (4/4, 60–90 BPM)
+  - Waltz (3/4, 84–90 BPM)
+  - Other (specify)
+
+  Then evaluate whether the tempo is appropriate for that form. Flag low
+  confidence if tempo_stability is below 0.5 or BPM seems implausible.
+
+  Score 0-10.
+"""
+
+# ---------------------------------------------------------------------------
+
+[[criterion]]
+id = "swing_feel"
+name = "Swung Rhythmic Feel"
+description = """
+  Jazz and dance band music of the 1920s–1930s is characterised by a swung
+  feel — off-beats are delayed, giving the music its propulsive, loping quality.
+  A straight feel is atypical for most genres of the era.
+  Exception: Charleston and some novelty songs have a more angular feel.
+"""
+weight = 1.5
+db_fields = [
+  "tracks.groove_feel",
+  "tracks.bpm",
+  "tracks.tempo_stability",
+]
+rule = "llm"
+prompt_hint = """
+  groove_feel: "straight", "swung", or "unclear".
+  bpm: detected tempo.
+  tempo_stability: 0.0–1.0.
+
+  For most 1920s–30s genres (foxtrot, slow blues, big band jazz), "swung"
+  is the expected value and should score highly.
+
+  "straight" is acceptable for Charleston and novelty songs — adjust accordingly
+  if the BPM suggests a Charleston tempo (180–220).
+
+  "unclear" should be treated as a neutral score (5/10).
+
+  Note: groove_feel detection on pre-click-track recordings with elastic timing
+  may be imprecise. Low tempo_stability may affect detection accuracy.
+
+  Score 0-10. Swung = high score for most genres.
+"""
+
+# ---------------------------------------------------------------------------
+
+[[criterion]]
+id = "aaba_form"
+name = "AABA or Period Song Form"
+description = """
+  The 32-bar AABA form was the Tin Pan Alley standard by the mid-1920s.
+  Four 8-bar sections: A (main theme), A (repeat), B (bridge/release), A (return).
+  Often preceded by a longer sectional verse in free rhythm (~16 bars).
+  12-bar blues form is also valid for blues and early jazz tracks.
+"""
+weight = 2.0
+db_field = "sections.label"
+rule = "llm"
+prompt_hint = """
+  You are given the detected section sequence with confidence scores.
+  Structural detection on 1920s recordings is significantly less reliable
+  than on modern recordings — treat low-confidence labels with scepticism.
+
+  Terminology note for this era: 'the verse' in Tin Pan Alley usage was the
+  long introductory section in free rhythm (often omitted on dance recordings).
+  'The chorus' was the entire 32-bar AABA structure — not a single hook section.
+
+  Evaluate whether the structure approximates:
+  1. AABA form: sectional verse (optional) + A A B A sequence
+  2. 12-bar blues: AAB lyric structure over a 12-bar harmonic cycle
+  3. Another identifiable period form (ABAC, verse-refrain, etc.)
+
+  Score 0-10. Acknowledge structural uncertainty explicitly if confidence
+  scores are low.
+"""
+
+# ---------------------------------------------------------------------------
+
+[[criterion]]
+id = "hook_refrain"
+name = "Memorable Refrain with Title"
+description = """
+  The AABA refrain must contain the song title and be the memorable,
+  repeatable commercial core. Tin Pan Alley songs were sold as sheet music;
+  the refrain was the part buyers wanted to play and sing at home.
+"""
+weight = 1.5
+db_fields = [
+  "tracks.hook_phrase",
+  "tracks.hook_repetition_count",
+  "tracks.song_name",
+]
+rule = "llm"
+prompt_hint = """
+  hook_phrase: the most repeated phrase detected in the track.
+  hook_repetition_count: how many times it appears.
+  song_name: parsed from the filename.
+
+  IMPORTANT: Whisper transcription accuracy on 1920s recordings is significantly
+  lower than on modern recordings due to surface noise, acoustic horn colouration,
+  and period pronunciation. Treat all lyric data with appropriate scepticism and
+  flag uncertainty explicitly.
+
+  Evaluate whether the hook phrase appears to contain or relate to the song title,
+  and whether it is simple and memorable enough to function as a commercial refrain
+  that buyers would want to play from sheet music.
+
+  Score 0-10. Flag low-confidence transcription explicitly.
+"""
+
+# ---------------------------------------------------------------------------
+
+[[criterion]]
+id = "harmony_period"
+name = "Period-Appropriate Harmony"
+description = """
+  Dance music of the era favours major keys and I-IV-V progressions.
+  Jazz introduces ii-V-I movement and dominant 7th chords.
+  Minor keys are common in blues. Evaluate harmonic consistency with 1920s–30s
+  practice.
+"""
+weight = 1.0
+db_fields = [
+  "tracks.key",
+  "tracks.mode",
+  "chord_progressions.progression",
+]
+rule = "llm"
+prompt_hint = """
+  You are given the key, mode, and chord progressions per section.
+
+  IMPORTANT: Chord detection on mono 1920s recordings is significantly less
+  accurate than on modern recordings (~50–60% accuracy). Treat chord data as
+  a rough guide only and flag uncertainty explicitly.
+
+  Evaluate harmonic appropriateness for early jazz and popular music:
+  - Major key + I-IV-V: expected for foxtrot, dance band
+  - Minor key + i-iv-V or i-IV-V: expected for blues, some jazz standards
+  - ii-V-I movement, dominant 7ths: period-appropriate jazz harmony
+  - Tritone substitutions, complex chromatic alterations: unusual pre-1935
+
+  Score 0-10. Acknowledge chord detection uncertainty.
+"""
+
+# ---------------------------------------------------------------------------
+
+[[criterion]]
+id = "duration_78rpm"
+name = "Track Length (78rpm Format)"
+description = """
+  78rpm shellac singles held approximately 2'30\"–3'50\" per side.
+  Most commercial dance recordings run 2'30\"–3'10\".
+  Tracks outside this range were either edited for release or were not
+  standard commercial singles.
+"""
+weight = 0.75
+db_field = "tracks.duration"
+rule = "range"
+threshold_min = 150
+threshold_max = 230
+unit = "seconds"
+fail_message = "Track length outside the 2'30\"–3'50\" expected range for 78rpm singles."
+
+# ---------------------------------------------------------------------------
+
+[[criterion]]
+id = "vocal_intelligibility"
+name = "Vocal Intelligibility"
+description = """
+  Early recording technology (single acoustic microphone, horn recording) made
+  vocal intelligibility a genuine commercial challenge. A successful track needed
+  a vocal that could be heard and understood above the band.
+  Assessed via Whisper transcription confidence as a proxy.
+"""
+weight = 0.75
+db_fields = [
+  "tracks.unique_word_ratio",
+  "tracks.hook_repetition_count",
+]
+rule = "llm"
+prompt_hint = """
+  unique_word_ratio: proportion of unique words to total (0.0–1.0).
+  hook_repetition_count: how many times the main phrase repeats.
+
+  Whisper transcription accuracy on 1920s recordings is lower than on modern
+  recordings due to surface noise, mono recording, and acoustic horn technology.
+  A higher word count and clearer structure in the transcript suggests a more
+  intelligible vocal track.
+
+  This criterion is inherently imprecise on historical recordings.
+
+  Flag instrumental tracks explicitly (no vocal detected = score 0 with note).
+  For vocal tracks, evaluate intelligibility as best you can from the available
+  data.
+
+  Score 0-10. Flag uncertainty explicitly.
+"""

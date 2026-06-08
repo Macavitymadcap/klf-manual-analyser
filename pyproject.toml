@@ -1,0 +1,96 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "manual-analyser"
+version = "0.1.0"
+description = "Score MP3s against The KLF's Manual hit-song criteria"
+readme = "README.md"
+license = { file = "LICENSES/MIT.txt" }
+
+# Strictly pin to 3.11 — tested environment.
+# madmom and msaf are confirmed broken on Python 3.10+; do not widen.
+requires-python = "==3.11.*"
+
+dependencies = [
+    # Audio decode
+    # ffmpeg is a system dependency — install via:
+    #   Fedora:  sudo dnf install ffmpeg
+    #   macOS:   brew install ffmpeg
+
+    # Source separation
+    "demucs>=4.0.0",
+
+    # Transcription
+    "openai-whisper>=20231117",
+
+    # Core MIR — confirmed working on Python 3.11
+    "librosa>=0.10.0",
+    "numpy>=1.24.0,<2.0.0",
+    "scipy>=1.11.0",
+    "scikit-learn>=1.3.0",
+
+    # Danceability and groove descriptors — confirmed working 2025-06-08
+    # AGPL 3.0 — fine for local CLI use (see docs/DESIGN.md)
+    "essentia>=2.1b5",
+
+    # Loudness measurement
+    "pyloudnorm>=0.1.1",
+
+    # LLM / embedding — Ollama HTTP, no SDK needed
+    "httpx>=0.25.0",
+
+    # Qdrant client — optional at runtime, guarded by try/except in embed.py
+    "qdrant-client>=1.7.0",
+
+    # sqlite3 is stdlib — no install needed
+
+    # CLI and reporting
+    "typer>=0.9.0",
+    "rich>=13.0.0",
+    "jinja2>=3.1.0",
+
+    # tomllib is stdlib in Python 3.11+ — no install needed
+]
+
+# ---------------------------------------------------------------------------
+# madmom and msaf are CONFIRMED BROKEN on Python 3.10+:
+#   madmom: collections.MutableSequence removed in Python 3.10
+#   msaf:   scipy.inf removed in SciPy 1.11
+# Neither library is used. librosa is the primary implementation throughout.
+# See klf-mir-dev/references/compatibility.md for full details.
+# ---------------------------------------------------------------------------
+
+[project.scripts]
+manual-analyser = "manual_analyser.cli:app"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/manual_analyser"]
+
+[dependency-groups]
+dev = [
+    "pytest>=7.4.0",
+    "pytest-cov>=4.1.0",
+    "pytest-watch>=4.2.0",
+    "ruff>=0.4.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]
+
+[tool.uv]
+# Only resolve for the platforms this tool actually runs on.
+# essentia has no Windows wheels — excluding Windows prevents resolution failures.
+environments = [
+    "sys_platform == 'linux'",
+    "sys_platform == 'darwin'",
+]
