@@ -1,6 +1,5 @@
 """Tests for manual_analyser.scoring.prompt"""
 
-
 import pytest
 
 from manual_analyser.db import get_connection

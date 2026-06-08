@@ -111,7 +111,7 @@ def transcribe_track(
         _write_nulls(resolved_db, track_id, short_id)
         return None
     except Exception as e:
-        logger.error("[%s] [whisper] Transcription failed: %s", short_id, e, exc_info=True)
+        logger.exception("[%s] [whisper] Transcription failed: %s", short_id, e, exc_info=True)
         _write_nulls(resolved_db, track_id, short_id)
         return None
 

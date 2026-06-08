@@ -264,7 +264,7 @@ def evaluate_all_deterministic(
             try:
                 results[criterion.id] = evaluate_deterministic(criterion, track_id, db_path)
             except Exception as e:
-                logger.error("Failed to evaluate criterion '%s': %s", criterion.id, e, exc_info=True)
+                logger.exception("Failed to evaluate criterion '%s': %s", criterion.id, e, exc_info=True)
                 results[criterion.id] = EvaluationResult(
                     criterion_id=criterion.id,
                     rule=criterion.rule,
@@ -397,29 +397,9 @@ def _parse_criterion(rc: dict, index: int) -> tuple[list[str], "Criterion | None
         return errors, None
 
     # Rule-specific validation
-    if rule in ("lte", "gte", "eq"):
-        if not has_db_field:
-            errors.append(f"criterion '{cid}': rule '{rule}' requires db_field (not db_fields)")
-        if "threshold" not in rc:
-            errors.append(f"criterion '{cid}': rule '{rule}' requires threshold")
+    errors = _validate_rules(rule, has_db_field, rc, cid, errors)
 
-    elif rule == "range":
-        if not has_db_field:
-            errors.append(f"criterion '{cid}': rule 'range' requires db_field")
-        if "threshold_min" not in rc or "threshold_max" not in rc:
-            errors.append(f"criterion '{cid}': rule 'range' requires threshold_min and threshold_max")
-
-    elif rule == "exists":
-        if not has_db_field:
-            errors.append(f"criterion '{cid}': rule 'exists' requires db_field")
-        if "value" not in rc:
-            errors.append(f"criterion '{cid}': rule 'exists' requires value")
-
-    elif rule == "llm":
-        if "prompt_hint" not in rc:
-            errors.append(f"criterion '{cid}': rule 'llm' requires prompt_hint")
-
-    if errors:
+    if len(errors) > 0:
         return errors, None
 
     return [], Criterion(
@@ -438,6 +418,51 @@ def _parse_criterion(rc: dict, index: int) -> tuple[list[str], "Criterion | None
         unit=rc.get("unit"),
         fail_message=rc.get("fail_message"),
     )
+
+
+def _validate_rules(rule: str, has_db_field: bool, rc: dict, cid: str, errors: list[str]) -> list[str]:
+    number_errors = _validate_number(rule, has_db_field, cid, rc, errors)
+    errors.extend(number_errors)
+
+    range_errors = _validate_range(rule, has_db_field, cid, rc, errors)
+    errors.extend(range_errors)
+
+    exists_errors = _validate_exists(rule, has_db_field, cid, rc, errors)
+    errors.extend(exists_errors)
+
+    if rule == "llm" and "prompt_hint" not in rc:
+        errors.append(f"criterion '{cid}': rule 'llm' requires prompt_hint")
+
+    return errors
+
+
+def _validate_number(rule, has_db_field, cid, rc, errors):
+    if rule in ("lte", "gte", "eq"):
+        if not has_db_field:
+            errors.append(f"criterion '{cid}': rule '{rule}' requires db_field (not db_fields)")
+        if "threshold" not in rc:
+            errors.append(f"criterion '{cid}': rule '{rule}' requires threshold")
+    return errors
+
+
+def _validate_range(rule, has_db_field, cid, rc, errors):
+    if rule == "range":
+        if not has_db_field:
+            errors.append(f"criterion '{cid}': rule 'range' requires db_field")
+        if "threshold_min" not in rc or "threshold_max" not in rc:
+            errors.append(f"criterion '{cid}': rule 'range' requires threshold_min and threshold_max")
+
+    return errors
+
+
+def _validate_exists(rule, has_db_field, cid, rc, errors):
+    if rule == "exists":
+        if not has_db_field:
+            errors.append(f"criterion '{cid}': rule 'exists' requires db_field")
+        if "value" not in rc:
+            errors.append(f"criterion '{cid}': rule 'exists' requires value")
+
+    return errors
 
 
 # ---------------------------------------------------------------------------
@@ -460,41 +485,60 @@ def _apply_rule(
         raw_value: The actual field value from the database.
 
     Returns:
-        (passed, score) where score is 0.0–1.0.
+        (passed, score) where score is 0.0-1.0.
     """
     rule = criterion.rule
 
     if rule == "lte":
-        passed = raw_value <= criterion.threshold
-        return passed, 1.0 if passed else 0.0
+        return _less_than_equal(raw_value, criterion.threshold)
 
     elif rule == "gte":
-        passed = raw_value >= criterion.threshold
-        return passed, 1.0 if passed else 0.0
+        return _greater_than_equal(raw_value, criterion.threshold)
 
     elif rule == "eq":
-        passed = abs(raw_value - criterion.threshold) < 1e-9
-        return passed, 1.0 if passed else 0.0
+        return _equal(raw_value, criterion.threshold)
 
     elif rule == "range":
-        lo, hi = criterion.threshold_min, criterion.threshold_max
-        passed = lo <= raw_value <= hi
-        if passed:
-            return True, 1.0
-        # Proportional score: distance from nearest bound
-        if raw_value < lo:
-            dist = (lo - raw_value) / (lo + 1e-9)
-        else:
-            dist = (raw_value - hi) / (hi + 1e-9)
-        score = float(max(0.0, 1.0 - dist))
-        return False, score
+        return _range(raw_value, criterion.threshold_min, criterion.threshold_max)
 
     elif rule == "exists":
-        # raw_value for exists is 1.0 (found) or 0.0 (not found)
-        passed = raw_value >= 1.0
-        return passed, 1.0 if passed else 0.0
+        return _exists(raw_value)
 
     return False, 0.0
+
+
+def _less_than_equal(raw_value: float, threshold: float) -> tuple[bool, float]:
+    passed = raw_value <= threshold
+    return passed, 1.0 if passed else 0.0
+
+
+def _greater_than_equal(raw_value: float, threshold: float) -> tuple[bool, float]:
+    passed = raw_value >= threshold
+    return passed, 1.0 if passed else 0.0
+
+
+def _equal(raw_value: float, threshold: float) -> tuple[bool, float]:
+    passed = abs(raw_value - threshold) < 1e-9
+    return passed, 1.0 if passed else 0.0
+
+
+def _range(raw_value: float, threshold_min: float, threshold_max: float) -> tuple[bool, float]:
+    passed = threshold_min <= raw_value <= threshold_max
+    if passed:
+        return True, 1.0
+    # Proportional score: distance from nearest bound
+    if raw_value < threshold_min:
+        dist = (threshold_min - raw_value) / (threshold_min + 1e-9)
+    else:
+        dist = (raw_value - threshold_max) / (threshold_max + 1e-9)
+    score = float(max(0.0, 1.0 - dist))
+    return False, score
+
+
+def _exists(raw_value: float) -> tuple[bool, float]:
+    # raw_value for exists is 1.0 (found) or 0.0 (not found)
+    passed = raw_value >= 1.0
+    return passed, 1.0 if passed else 0.0
 
 
 # ---------------------------------------------------------------------------

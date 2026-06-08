@@ -183,27 +183,27 @@ class TestApplyRule:
 
     def test_lte_exact_boundary_passes(self):
         c = self._make("lte", threshold=135.0)
-        passed, score = _apply_rule(c, 135.0)
+        passed, _ = _apply_rule(c, 135.0)
         assert passed is True
 
     def test_gte_pass(self):
         c = self._make("gte", threshold=0.15)
-        passed, score = _apply_rule(c, 0.20)
+        passed, _ = _apply_rule(c, 0.20)
         assert passed is True
 
     def test_gte_fail(self):
         c = self._make("gte", threshold=0.15)
-        passed, score = _apply_rule(c, 0.10)
+        passed, _ = _apply_rule(c, 0.10)
         assert passed is False
 
     def test_eq_pass(self):
         c = self._make("eq", threshold=4.0)
-        passed, score = _apply_rule(c, 4.0)
+        passed, _ = _apply_rule(c, 4.0)
         assert passed is True
 
     def test_eq_fail(self):
         c = self._make("eq", threshold=4.0)
-        passed, score = _apply_rule(c, 3.0)
+        passed, _ = _apply_rule(c, 3.0)
         assert passed is False
 
     def test_range_pass(self):
@@ -247,7 +247,7 @@ class TestApplyRule:
             threshold_min=8.0,
             threshold_max=30.0,
         )
-        passed, score = _apply_rule(c, 60.0)
+        passed, _ = _apply_rule(c, 60.0)
         assert passed is False
 
     def test_exists_pass(self):
@@ -260,7 +260,7 @@ class TestApplyRule:
             db_field="sections.label",
             value="chorus",
         )
-        passed, score = _apply_rule(c, 1.0)
+        passed, _ = _apply_rule(c, 1.0)
         assert passed is True
 
     def test_exists_fail(self):
@@ -273,7 +273,7 @@ class TestApplyRule:
             db_field="sections.label",
             value="breakdown",
         )
-        passed, score = _apply_rule(c, 0.0)
+        passed, _ = _apply_rule(c, 0.0)
         assert passed is False
 
 
@@ -322,7 +322,7 @@ class TestParseCriterion:
             "db_field": "tracks.bpm",
             "threshold": 135,
         }
-        errors, c = _parse_criterion(rc, 0)
+        errors, _ = _parse_criterion(rc, 0)
         assert any("id" in e for e in errors)
 
     def test_both_db_field_and_db_fields_returns_error(self):
@@ -336,7 +336,7 @@ class TestParseCriterion:
             "db_fields": ["tracks.bpm"],
             "prompt_hint": "hint",
         }
-        errors, c = _parse_criterion(rc, 0)
+        errors, _ = _parse_criterion(rc, 0)
         assert any("mutually exclusive" in e for e in errors)
 
     def test_lte_without_threshold_returns_error(self):
@@ -348,7 +348,7 @@ class TestParseCriterion:
             "rule": "lte",
             "db_field": "tracks.bpm",
         }
-        errors, c = _parse_criterion(rc, 0)
+        errors, _ = _parse_criterion(rc, 0)
         assert any("threshold" in e for e in errors)
 
     def test_exists_without_value_returns_error(self):
@@ -360,7 +360,7 @@ class TestParseCriterion:
             "rule": "exists",
             "db_field": "sections.label",
         }
-        errors, c = _parse_criterion(rc, 0)
+        errors, _ = _parse_criterion(rc, 0)
         assert any("value" in e for e in errors)
 
     def test_unknown_rule_returns_error(self):
@@ -372,7 +372,7 @@ class TestParseCriterion:
             "rule": "frobulate",
             "db_field": "tracks.bpm",
         }
-        errors, c = _parse_criterion(rc, 0)
+        errors, _ = _parse_criterion(rc, 0)
         assert any("unknown rule" in e for e in errors)
 
 
@@ -612,7 +612,7 @@ class TestComputeOverallScore:
             "a": EvaluationResult("a", "lte", True, 1.0, 120.0, None, False),
             "b": EvaluationResult("b", "lte", False, 0.0, 140.0, "fail", False),
         }
-        # (1.0 * 2.0 + 0.0 * 1.0) / 3.0 = 0.667
+        # Computation: (1.0 * 2.0 + 0.0 * 1.0) / 3.0 = 0.667
         score = compute_overall_score(results, self._mode(criteria))
         assert score == pytest.approx(2 / 3, abs=0.01)
 
