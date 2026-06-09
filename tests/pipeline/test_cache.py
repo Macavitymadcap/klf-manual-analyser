@@ -2,6 +2,7 @@
 
 import pytest
 
+from manual_analyser.audio.decode import utc_now_iso
 from manual_analyser.db import get_connection
 from manual_analyser.pipeline.cache import (
     scores_exist,
@@ -10,7 +11,6 @@ from manual_analyser.pipeline.cache import (
     transcript_in_db,
     vector_in_qdrant,
 )
-from manual_analyser.utils import utc_now_iso
 
 TRACK_ID = "a" * 32
 

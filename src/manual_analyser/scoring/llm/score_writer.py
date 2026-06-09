@@ -3,9 +3,9 @@
 import logging
 from pathlib import Path
 
+from manual_analyser.audio.decode import utc_now_iso
 from manual_analyser.db import get_connection
 from manual_analyser.scoring.llm.types import LlmFailure, LlmResult, LlmScore
-from manual_analyser.utils import utc_now_iso
 
 logger = logging.getLogger(__name__)
 

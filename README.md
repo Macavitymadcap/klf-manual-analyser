@@ -47,16 +47,15 @@ flowchart TD
     C --> F[vocals.wav]
     C --> G[other.wav]
 
-    D --> H[madmom\nbeat & rhythm analysis]
-    E --> I[librosa\nharmony & energy]
+    D --> H[librosa\nbeat & rhythm analysis]
+    E --> I[librosa + essentia\nharmony & energy]
     F --> J[Whisper\ntranscription]
     G --> I
     B --> I
-    B --> K[msaf\nstructural segmentation]
+    B --> H
 
     H --> L[SQLite\nmanual_analyser.db]
     I --> L
-    K --> L
     J --> L
 
     L --> M[hybrid structure\nalignment]

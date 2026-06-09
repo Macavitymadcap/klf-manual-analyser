@@ -32,12 +32,12 @@ from pathlib import Path
 import librosa
 import numpy as np
 
-from manual_analyser.db import get_connection
-from manual_analyser.utils import (
+from manual_analyser.analysis.normalise import (
     normalise_dynamic_range,
     normalise_loudness,
     normalise_verse_chorus_delta,
 )
+from manual_analyser.db import get_connection
 
 logger = logging.getLogger(__name__)
 

@@ -15,6 +15,7 @@ from pathlib import Path
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 from manual_analyser.aggregation.aggregate import InsufficientDataError, aggregate
+from manual_analyser.audio.decode import utc_now_iso
 from manual_analyser.report.queries import (
     load_criterion_summaries,
     load_scored_track_ids,
@@ -22,7 +23,6 @@ from manual_analyser.report.queries import (
     load_track_row,
 )
 from manual_analyser.report.types import SummaryReportData
-from manual_analyser.utils import utc_now_iso
 
 logger = logging.getLogger(__name__)
 
