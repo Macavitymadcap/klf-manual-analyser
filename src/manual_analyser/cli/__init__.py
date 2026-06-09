@@ -17,8 +17,10 @@ from manual_analyser.audio.decode import DecodeAbortError, check_ffmpeg
 from manual_analyser.audio.separate import SeparateAbortError
 from manual_analyser.cli import logging_setup
 from manual_analyser.cli.clean import clean as run_clean
-from manual_analyser.cli.output import console, print_error, print_info, print_run_summary
+from manual_analyser.cli.output import print_error, print_info, print_run_summary
 from manual_analyser.pipeline import run_pipeline
+from manual_analyser.report.render import RenderError, render
+from manual_analyser.report.server import serve as run_server
 from manual_analyser.scoring.llm import OllamaUnavailableError, check_ollama
 
 app = typer.Typer(
@@ -42,7 +44,7 @@ def analyse(
     data_dir: Annotated[Path, typer.Option(help="Data directory")] = _DEFAULT_DATA,
     verbose: Annotated[bool, typer.Option("--verbose", "-v")] = False,
 ) -> None:
-    """Analyse a folder of MP3s and score against The Manual's criteria."""
+    """Analyse a folder of MPs and score against The Manual's criteria."""
     _validate_mode(mode)
     _validate_path(path)
 
@@ -55,7 +57,6 @@ def analyse(
         raise typer.Exit(1)
 
     print_info(f"Found {len(mp3_paths)} MP3s — mode: {mode}")
-
     _check_hard_dependencies(model)
 
     try:
@@ -86,8 +87,19 @@ def report(
 ) -> None:
     """Re-render the HTML report from the database."""
     _validate_mode(mode)
-    console.print("[yellow]report command: report renderer not yet implemented.[/yellow]")
-    console.print("Run the pipeline first, then check back once report/render.py is complete.")
+    db_path = data_dir / "manual_analyser.db"
+
+    if not db_path.exists():
+        print_error(f"No database found at {db_path} — run 'analyse' first.")
+        raise typer.Exit(1)
+
+    try:
+        summary_path = render(mode, db_path, data_dir)
+        print_info(f"Report written to {summary_path}")
+        print_info("Run 'manual-analyser serve' to browse it.")
+    except RenderError as exc:
+        print_error(str(exc))
+        raise typer.Exit(1)
 
 
 @app.command()
@@ -96,8 +108,7 @@ def serve(
     data_dir: Annotated[Path, typer.Option(help="Data directory")] = _DEFAULT_DATA,
 ) -> None:
     """Start the local report server."""
-    console.print("[yellow]serve command: report server not yet implemented.[/yellow]")
-    console.print("Run the pipeline first, then check back once report/server.py is complete.")
+    run_server(data_dir=data_dir, port=port)
 
 
 @app.command()
@@ -122,11 +133,6 @@ def clean(
     run_clean(data_dir=data_dir, stems=stems, features=features, reports=reports)
 
 
-# ---------------------------------------------------------------------------
-# Validation helpers
-# ---------------------------------------------------------------------------
-
-
 def _validate_mode(mode: str) -> None:
     if mode not in _VALID_MODES:
         print_error(f"Unknown mode '{mode}'. Valid modes: {', '.join(_VALID_MODES)}")
@@ -143,7 +149,6 @@ def _validate_path(path: Path) -> None:
 
 
 def _check_hard_dependencies(model: str) -> None:
-    """Check ffmpeg and Ollama are available before starting."""
     try:
         check_ffmpeg()
     except DecodeAbortError as exc:

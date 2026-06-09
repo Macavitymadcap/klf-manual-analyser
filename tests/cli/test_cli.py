@@ -13,6 +13,8 @@ runner = CliRunner()
 _PATCH_PIPELINE = "manual_analyser.cli.run_pipeline"
 _PATCH_FFMPEG = "manual_analyser.cli.check_ffmpeg"
 _PATCH_OLLAMA = "manual_analyser.cli.check_ollama"
+_PATCH_RENDER = "manual_analyser.cli.render"
+_PATCH_SERVER = "manual_analyser.cli.run_server"
 
 
 def _complete_summary(mp3_path: str) -> RunSummary:
@@ -84,10 +86,29 @@ class TestAnalyseCommand:
 
 
 class TestReportCommand:
-    def test_not_yet_implemented_message(self):
-        result = runner.invoke(app, ["report", "--mode", "1988"])
+    def test_exits_1_when_no_database(self, tmp_path):
+        result = runner.invoke(app, ["report", "--mode", "1988", "--data-dir", str(tmp_path)])
+        assert result.exit_code == 1
+        assert "No database" in result.output
+
+    def test_renders_when_db_exists(self, tmp_path):
+
+        db = tmp_path / "manual_analyser.db"
+        db.write_bytes(b"")
+        with patch("manual_analyser.cli.render", return_value=tmp_path / "index.html") as mock_render:
+            result = runner.invoke(app, ["report", "--mode", "1988", "--data-dir", str(tmp_path)])
+        mock_render.assert_called_once()
         assert result.exit_code == 0
-        assert "not yet implemented" in result.output
+
+    def test_render_error_exits_1(self, tmp_path):
+        from manual_analyser.report.render import RenderError
+
+        db = tmp_path / "manual_analyser.db"
+        db.write_bytes(b"")
+        with patch("manual_analyser.cli.render", side_effect=RenderError("template broken")):
+            result = runner.invoke(app, ["report", "--mode", "1988", "--data-dir", str(tmp_path)])
+        assert result.exit_code == 1
+        assert "template broken" in result.output
 
     def test_invalid_mode_exits_1(self):
         result = runner.invoke(app, ["report", "--mode", "badmode"])
@@ -95,10 +116,15 @@ class TestReportCommand:
 
 
 class TestServeCommand:
-    def test_not_yet_implemented_message(self):
-        result = runner.invoke(app, ["serve"])
-        assert result.exit_code == 0
-        assert "not yet implemented" in result.output
+    def test_calls_server(self, tmp_path):
+        with patch("manual_analyser.cli.run_server") as mock_serve:
+            runner.invoke(app, ["serve", "--data-dir", str(tmp_path)])
+        mock_serve.assert_called_once_with(data_dir=tmp_path, port=8000)
+
+    def test_custom_port(self, tmp_path):
+        with patch("manual_analyser.cli.run_server") as mock_serve:
+            runner.invoke(app, ["serve", "--port", "9000", "--data-dir", str(tmp_path)])
+        mock_serve.assert_called_once_with(data_dir=tmp_path, port=9000)
 
 
 class TestCleanCommand:
