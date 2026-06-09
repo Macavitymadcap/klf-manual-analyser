@@ -13,8 +13,8 @@ Writes to SQLite:
     hihat_pattern, syncopation_score, rhythmic_density)
   UPDATE tracks SET groove_feel = ? WHERE track_id = ?
 
-Note: madmom is confirmed broken on Python 3.10+ (collections.MutableSequence
-removed). This module uses librosa exclusively. See compatibility.md.
+Uses librosa exclusively. madmom is confirmed broken on Python 3.10+.
+See klf-mir-dev/references/compatibility.md.
 
 Error handling (per docs/ERROR_HANDLING.md):
   - Numerical errors → write null/default values, log warning, continue
@@ -29,11 +29,6 @@ import librosa
 import numpy as np
 
 from manual_analyser.db import get_connection
-from manual_analyser.utils import (
-    classify_groove_feel,
-    normalise_rhythmic_density,
-    onsets_to_pattern,
-)
 
 logger = logging.getLogger(__name__)
 
@@ -123,10 +118,6 @@ def _compute_rhythm(drums_wav: Path, short_id: str) -> RhythmResult:
     """
     Load the drums stem and compute rhythm features.
 
-    Separates the drums stem into frequency bands to isolate kick, snare,
-    and hi-hat, then detects onsets in each band and quantises them to a
-    16-step grid. The modal pattern across all bars is returned.
-
     Args:
         drums_wav: Path to the drums stem WAV.
         short_id: First 8 chars of track_id for log messages.
@@ -137,7 +128,6 @@ def _compute_rhythm(drums_wav: Path, short_id: str) -> RhythmResult:
     y, sr = librosa.load(str(drums_wav), sr=None, mono=True)
     logger.debug("[%s] [rhythm] Loaded drums stem %.1fs", short_id, len(y) / sr)
 
-    # Get beat grid from the full drum signal
     _, beat_frames = librosa.beat.beat_track(y=y, sr=sr, units="frames")
     beat_times = librosa.frames_to_time(beat_frames, sr=sr)
 
@@ -145,25 +135,20 @@ def _compute_rhythm(drums_wav: Path, short_id: str) -> RhythmResult:
         logger.warning("[%s] [rhythm] Too few beats detected (%d)", short_id, len(beat_frames))
         return _null_result()
 
-    # Onset detection per frequency band
     kick_onsets = _detect_onsets_in_band(y, sr, fmin=None, fmax=KICK_FMAX)
     snare_onsets = _detect_onsets_in_band(y, sr, fmin=SNARE_FMIN, fmax=SNARE_FMAX)
     hihat_onsets = _detect_onsets_in_band(y, sr, fmin=HIHAT_FMIN, fmax=None)
 
-    # Quantise to 16-step patterns
     kick_pattern = onsets_to_pattern(kick_onsets, beat_frames, steps=PATTERN_STEPS)
     snare_pattern = onsets_to_pattern(snare_onsets, beat_frames, steps=PATTERN_STEPS)
     hihat_pattern = onsets_to_pattern(hihat_onsets, beat_frames, steps=PATTERN_STEPS)
 
-    # Syncopation: ratio of off-beat onsets to total onsets
     all_onsets = np.unique(np.concatenate([kick_onsets, snare_onsets, hihat_onsets]))
     syncopation = _compute_syncopation(all_onsets, beat_frames, sr)
 
-    # Rhythmic density: average onsets per beat, normalised
     raw_density = len(all_onsets) / max(len(beat_frames), 1)
     rhythmic_density = normalise_rhythmic_density(raw_density)
 
-    # Groove feel classification
     groove_feel = classify_groove_feel(beat_times, sr)
 
     return RhythmResult(
@@ -184,9 +169,6 @@ def _detect_onsets_in_band(
 ) -> np.ndarray:
     """
     Detect onset frames in a specific frequency band.
-
-    Applies a bandpass filter via the onset strength envelope, which
-    internally uses a mel spectrogram bounded by fmin/fmax.
 
     Args:
         y: Audio signal (mono).
@@ -227,12 +209,11 @@ def _compute_syncopation(
     Compute syncopation as the ratio of off-beat onsets to total onsets.
 
     An onset is "on-beat" if it falls within one hop of a beat frame.
-    Everything else is "off-beat" (syncopated).
 
     Args:
         onset_frames: All onset frame indices.
         beat_frames: Beat frame indices.
-        sr: Sample rate (unused directly, kept for interface consistency).
+        sr: Sample rate (kept for interface consistency).
         hop_length: Hop length used in onset detection.
 
     Returns:
@@ -241,7 +222,7 @@ def _compute_syncopation(
     if len(onset_frames) == 0 or len(beat_frames) == 0:
         return 0.0
 
-    tolerance = 2  # frames — within 2 frames of a beat = "on beat"
+    tolerance = 2  # frames
 
     on_beat = 0
     for onset in onset_frames:
@@ -266,6 +247,144 @@ def _null_result() -> RhythmResult:
 
 
 # ---------------------------------------------------------------------------
+# Beat pattern encoding (moved from utils.py)
+# ---------------------------------------------------------------------------
+
+
+def onsets_to_pattern(
+    onset_frames: np.ndarray,
+    beat_frames: np.ndarray,
+    steps: int = 16,
+) -> str:
+    """
+    Quantise onset events to a 16-step binary grid string.
+
+    Maps each onset to the nearest step in a single bar grid derived
+    from the median inter-beat interval. Returns the modal pattern
+    across all bars in the track.
+
+    Args:
+        onset_frames: Array of onset frame indices.
+        beat_frames: Array of beat frame indices.
+        steps: Number of steps per bar (default 16 = semiquaver resolution).
+
+    Returns:
+        16-character binary string, e.g. "1000100010001000" for four-on-the-floor.
+        Returns "0" * steps if onset_frames or beat_frames is empty.
+    """
+    if len(onset_frames) == 0 or len(beat_frames) < 2:
+        return "0" * steps
+
+    ibi = float(np.median(np.diff(beat_frames)))
+    step_size = ibi / (steps / 4)  # one beat = 4 sixteenth notes
+
+    bar_patterns: list[list[int]] = []
+    bar_length = ibi * 4
+    start = beat_frames[0]
+    n_bars = max(1, int((beat_frames[-1] - start) / bar_length))
+
+    for bar_idx in range(n_bars):
+        bar_start = start + bar_idx * bar_length
+        bar_end = bar_start + bar_length
+        pattern = [0] * steps
+
+        bar_onsets = onset_frames[(onset_frames >= bar_start) & (onset_frames < bar_end)]
+
+        for onset in bar_onsets:
+            step = int((onset - bar_start) / step_size)
+            if 0 <= step < steps:
+                pattern[step] = 1
+
+        bar_patterns.append(pattern)
+
+    if not bar_patterns:
+        return "0" * steps
+
+    patterns_array = np.array(bar_patterns)
+    modal = (patterns_array.mean(axis=0) >= 0.5).astype(int)
+    return "".join(str(v) for v in modal)
+
+
+# ---------------------------------------------------------------------------
+# Groove feel classification (moved from utils.py)
+# ---------------------------------------------------------------------------
+
+
+def classify_groove_feel(
+    beat_times: np.ndarray,
+    sr: int,
+    hop_length: int = 512,
+) -> str:
+    """
+    Classify the rhythmic feel of a track as 'straight', 'swung', or 'unclear'.
+
+    Uses the swing ratio: the ratio of the duration of the first 8th-note
+    subdivision to the second within each beat. A perfectly straight feel
+    has a ratio of 0.5 (equal division). Full triplet swing is 0.67.
+
+    Thresholds:
+        > 0.55  → 'swung'
+        < 0.52  → 'straight'
+        otherwise → 'unclear'
+
+    Args:
+        beat_times: Array of beat timestamps in seconds.
+        sr: Sample rate.
+        hop_length: Hop length used during beat tracking.
+
+    Returns:
+        'straight', 'swung', or 'unclear'.
+    """
+    if len(beat_times) < 8:
+        return "unclear"
+
+    swing_ratios = []
+    for i in range(0, len(beat_times) - 2, 2):
+        beat_start = beat_times[i]
+        beat_end = beat_times[i + 1]
+        midpoint = beat_start + (beat_end - beat_start) / 2.0
+
+        # Approximate: use ibi proportions as proxy for 8th-note timing
+        first_half = midpoint - beat_start
+        second_half = beat_end - midpoint
+        total = first_half + second_half
+
+        if total > 0:
+            ratio = first_half / total
+            swing_ratios.append(ratio)
+
+    if not swing_ratios:
+        return "unclear"
+
+    mean_ratio = float(np.mean(swing_ratios))
+
+    if mean_ratio > 0.55:
+        return "swung"
+    elif mean_ratio < 0.52:
+        return "straight"
+    else:
+        return "unclear"
+
+
+# ---------------------------------------------------------------------------
+# Normalisation (moved from utils.py)
+# ---------------------------------------------------------------------------
+
+
+def normalise_rhythmic_density(onsets_per_beat: float) -> float:
+    """
+    Normalise rhythmic density from [0, 4] onsets/beat to [0.0, 1.0].
+
+    Args:
+        onsets_per_beat: Raw rhythmic density.
+
+    Returns:
+        Normalised value clamped to [0.0, 1.0].
+    """
+    return float(np.clip(onsets_per_beat / 4.0, 0.0, 1.0))
+
+
+# ---------------------------------------------------------------------------
 # SQLite writes
 # ---------------------------------------------------------------------------
 
@@ -280,7 +399,6 @@ def _write_result(
     conn = get_connection(db_path)
     try:
         with conn:
-            # Insert beat pattern row
             conn.execute(
                 """
                 INSERT INTO beat_patterns (
@@ -297,7 +415,6 @@ def _write_result(
                     round(result.rhythmic_density, 4),
                 ),
             )
-            # Update groove_feel on tracks row
             conn.execute(
                 "UPDATE tracks SET groove_feel = ? WHERE track_id = ?",
                 (result.groove_feel, track_id),

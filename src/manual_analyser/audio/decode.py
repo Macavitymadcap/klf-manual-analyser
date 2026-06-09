@@ -15,14 +15,16 @@ Error handling (per docs/ERROR_HANDLING.md):
   - Filename non-conformant → accept, store artist=None, emit warning
 """
 
+import hashlib
 import logging
+import re
 import shutil
 import subprocess
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 
 from manual_analyser.db import get_connection
-from manual_analyser.utils import make_track_id, parse_filename, utc_now_iso
 
 logger = logging.getLogger(__name__)
 
@@ -32,6 +34,9 @@ TOOL_VERSION = "0.1.0"
 # Output audio format
 SAMPLE_RATE = 44100
 CHANNELS = 1  # mono
+
+# Expected filename format: Artist_Name-Song_Title.mp3
+_FILENAME_PATTERN = re.compile(r"^(?P<artist>[^-]+)-(?P<title>.+)$")
 
 
 # ---------------------------------------------------------------------------
@@ -69,6 +74,65 @@ class DecodeResult:
     duration: float  # seconds
     stem_dir: Path  # data/stems/{track_id}/
     full_wav: Path  # data/stems/{track_id}/full.wav
+
+
+# ---------------------------------------------------------------------------
+# Track identity and filename parsing (ingest helpers)
+# ---------------------------------------------------------------------------
+
+
+def make_track_id(path: Path | str) -> str:
+    """
+    Return a stable 32-character MD5 hex digest identifying a track.
+
+    The digest is computed from the absolute path string, so the same file
+    at the same location always produces the same ID. Moving or renaming
+    the file produces a different ID — this is intentional, as the pipeline
+    caches stems at data/stems/{track_id}/ and a renamed file should be
+    treated as a new track.
+
+    Args:
+        path: Path to the MP3 file.
+
+    Returns:
+        32-character lowercase hex string.
+    """
+    abs_path = str(Path(path).resolve())
+    return hashlib.md5(abs_path.encode()).hexdigest()
+
+
+def parse_filename(path: Path | str) -> tuple[str | None, str | None]:
+    """
+    Parse artist and song title from a filename following the convention:
+        Artist_Name-Song_Title.mp3
+
+    Underscores separate words within artist or title. The hyphen separates
+    artist from title (split on first hyphen only).
+
+    Returns:
+        (artist, song_name) — both title-cased with underscores replaced
+        by spaces. Returns (None, None) if the filename does not match
+        the expected pattern; the caller should log a warning.
+
+    Examples:
+        >>> parse_filename("The_KLF-Doctorin_The_Tardis.mp3")
+        ('The Klf', 'Doctorin The Tardis')
+        >>> parse_filename("unknown_file.mp3")
+        (None, None)
+    """
+    stem = Path(path).stem
+    match = _FILENAME_PATTERN.match(stem)
+    if not match:
+        return None, None
+
+    artist = match.group("artist").replace("_", " ").title()
+    title = match.group("title").replace("_", " ").title()
+    return artist, title
+
+
+def utc_now_iso() -> str:
+    """Return the current UTC time as an ISO 8601 string."""
+    return datetime.now(timezone.utc).isoformat()
 
 
 # ---------------------------------------------------------------------------
@@ -127,23 +191,19 @@ def decode_track(
     mp3_path = Path(mp3_path)
     data_dir = Path(data_dir)
 
-    # Input validation
     if not mp3_path.exists():
         raise DecodeSkipError(f"File not found: {mp3_path}")
 
-    if mp3_path.suffix.lower() != ".mp3":
+    if not mp3_path.suffix.lower() == ".mp3":
         raise DecodeSkipError(f"Expected .mp3 file, got: {mp3_path.suffix}")
 
-    # ffmpeg check (will raise DecodeAbortError if missing)
     check_ffmpeg()
 
-    # Derive track identity and paths
     track_id = make_track_id(mp3_path)
     short_id = track_id[:8]
     stem_dir = data_dir / "stems" / track_id
     full_wav = stem_dir / "full.wav"
 
-    # Parse filename
     artist, song_name = parse_filename(mp3_path)
     if artist is None:
         logger.warning(
@@ -153,7 +213,6 @@ def decode_track(
             mp3_path.name,
         )
 
-    # Decode step — skip if cached
     if full_wav.exists() and not no_cache:
         logger.info("[%s] [decode] WAV exists, skipping ffmpeg: %s", short_id, mp3_path.name)
     else:
@@ -161,10 +220,8 @@ def decode_track(
         _run_ffmpeg(mp3_path, full_wav, short_id)
         logger.info("[%s] [decode] Decoded: %s", short_id, mp3_path.name)
 
-    # Get duration from the decoded WAV
     duration = _get_duration(full_wav, short_id)
 
-    # Write to SQLite
     resolved_db = Path(db_path) if db_path else data_dir / "manual_analyser.db"
     _write_track_row(
         db_path=resolved_db,
@@ -205,31 +262,26 @@ def _run_ffmpeg(mp3_path: Path, output_wav: Path, short_id: str) -> None:
     """
     cmd = [
         "ffmpeg",
-        "-y",  # overwrite output without asking
+        "-y",
         "-i",
-        str(mp3_path),  # input file
+        str(mp3_path),
         "-ac",
-        str(CHANNELS),  # mono
+        str(CHANNELS),
         "-ar",
-        str(SAMPLE_RATE),  # 44100 Hz
+        str(SAMPLE_RATE),
         "-af",
-        "loudnorm",  # normalise to -23 LUFS (EBU R128)
+        "loudnorm",
         "-acodec",
-        "pcm_s16le",  # 16-bit PCM WAV
+        "pcm_s16le",
         str(output_wav),
     ]
 
     logger.debug("[%s] [decode] ffmpeg command: %s", short_id, " ".join(cmd))
 
-    result = subprocess.run(
-        cmd,
-        capture_output=True,
-        text=True,
-    )
+    result = subprocess.run(cmd, capture_output=True, text=True)
 
     if result.returncode != 0:
         logger.error("[%s] [decode] ffmpeg failed (exit %d):\n%s", short_id, result.returncode, result.stderr)
-        # Clean up partial output if it exists
         if output_wav.exists():
             output_wav.unlink()
         raise DecodeSkipError(f"ffmpeg failed for {mp3_path.name} (exit code {result.returncode})")
@@ -267,7 +319,6 @@ def _get_duration(wav_path: Path, short_id: str) -> float:
         except ValueError:
             pass
 
-    # Fallback: read WAV header
     logger.warning("[%s] [decode] ffprobe failed, falling back to WAV header for duration", short_id)
     return _duration_from_wav_header(wav_path)
 
@@ -275,9 +326,6 @@ def _get_duration(wav_path: Path, short_id: str) -> float:
 def _duration_from_wav_header(wav_path: Path) -> float:
     """
     Read duration from WAV file header without loading audio into memory.
-
-    Args:
-        wav_path: Path to the WAV file.
 
     Returns:
         Duration in seconds, or 0.0 if the header cannot be read.
@@ -303,18 +351,10 @@ def _write_track_row(
     duration: float,
 ) -> None:
     """
-    Insert or update the tracks row for this track_id.
+    Insert the tracks row for this track_id.
 
     Uses INSERT OR IGNORE so re-running decode on a cached track does not
     overwrite analysis data written by later pipeline stages.
-
-    Args:
-        db_path: Path to the SQLite database.
-        track_id: MD5 hex digest of the track path.
-        filename: Original MP3 filename.
-        artist: Parsed artist name, or None.
-        song_name: Parsed song title, or None.
-        duration: Track duration in seconds.
     """
     conn = get_connection(db_path)
     try:
@@ -322,24 +362,11 @@ def _write_track_row(
             conn.execute(
                 """
                 INSERT OR IGNORE INTO tracks (
-                    track_id,
-                    filename,
-                    artist,
-                    song_name,
-                    duration,
-                    analysis_timestamp,
-                    analysis_version
+                    track_id, filename, artist, song_name, duration,
+                    analysis_timestamp, analysis_version
                 ) VALUES (?, ?, ?, ?, ?, ?, ?)
                 """,
-                (
-                    track_id,
-                    filename,
-                    artist,
-                    song_name,
-                    duration,
-                    utc_now_iso(),
-                    TOOL_VERSION,
-                ),
+                (track_id, filename, artist, song_name, duration, utc_now_iso(), TOOL_VERSION),
             )
     finally:
         conn.close()

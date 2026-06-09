@@ -19,7 +19,7 @@ import logging
 from dataclasses import dataclass
 from pathlib import Path
 
-from manual_analyser.utils import get_torch_device
+from manual_analyser.audio.device import get_torch_device
 
 logger = logging.getLogger(__name__)
 
@@ -102,7 +102,6 @@ def separate_track(
     stem_dir = data_dir / "stems" / track_id
     short_id = track_id[:8]
 
-    # Check cache
     if not no_cache and _stems_exist(stem_dir):
         logger.info("[%s] [separate] Stems exist, skipping Demucs", short_id)
         return _build_result(track_id, stem_dir, device_used="cached", was_cpu_fallback=False)
@@ -124,7 +123,6 @@ def separate_track(
         except _OOMError:
             raise SeparateSkipError(f"[{short_id}] Demucs OOM on both {device} and CPU")
 
-    # Verify all stems were produced
     missing = [name for name in STEM_NAMES if not (stem_dir / f"{name}.wav").exists()]
     if missing:
         raise SeparateSkipError(f"[{short_id}] Demucs produced incomplete stems, missing: {missing}")
@@ -168,6 +166,12 @@ class _OOMError(Exception):
     """Internal signal for out-of-memory conditions during Demucs."""
 
 
+def _is_oom(error: Exception) -> bool:
+    """Return True if an exception represents an out-of-memory condition."""
+    msg = str(error).lower()
+    return "out of memory" in msg or "cuda out of memory" in msg or "mps backend out of memory" in msg or "oom" in msg
+
+
 def _run_demucs(
     full_wav: Path,
     stem_dir: Path,
@@ -176,11 +180,6 @@ def _run_demucs(
 ) -> None:
     """
     Run Demucs htdemucs separation on full_wav, writing stems to stem_dir.
-
-    Demucs writes output to a subdirectory structure:
-        <stem_dir>/htdemucs/<wav_stem>/{drums,bass,vocals,other}.wav
-
-    This function moves the stems up to stem_dir/ directly after separation.
 
     Args:
         full_wav: Input WAV path.
@@ -201,7 +200,6 @@ def _run_demucs(
     except ImportError as e:
         raise SeparateAbortError(f"Could not import Demucs: {e}\nEnsure demucs is installed: uv add demucs") from e
 
-    # Load model
     try:
         model = get_model(DEMUCS_MODEL)
         model.eval()
@@ -211,7 +209,6 @@ def _run_demucs(
             "Try: python -m demucs --help to verify the model is available."
         ) from e
 
-    # Move model to device
     try:
         model.to(device)
     except (RuntimeError, torch.cuda.OutOfMemoryError) as e:
@@ -219,7 +216,6 @@ def _run_demucs(
             raise _OOMError(str(e)) from e
         raise SeparateSkipError(f"[{short_id}] Failed to move model to {device}: {e}") from e
 
-    # Load audio
     try:
         wav = AudioFile(full_wav).read(
             streams=0,
@@ -229,7 +225,6 @@ def _run_demucs(
     except Exception as e:
         raise SeparateSkipError(f"[{short_id}] Could not load audio for separation: {e}") from e
 
-    # Run separation
     try:
         with torch.no_grad():
             ref = wav.mean(0)
@@ -249,7 +244,6 @@ def _run_demucs(
     except Exception as e:
         raise SeparateSkipError(f"[{short_id}] Unexpected error during separation: {e}") from e
 
-    # Save stems
     try:
         for stem_name, source in zip(model.sources, sources):
             out_path = stem_dir / f"{stem_name}.wav"
@@ -257,9 +251,3 @@ def _run_demucs(
             logger.debug("[%s] [separate] Saved stem: %s", short_id, out_path.name)
     except Exception as e:
         raise SeparateSkipError(f"[{short_id}] Failed to save stems: {e}") from e
-
-
-def _is_oom(error: Exception) -> bool:
-    """Return True if an exception represents an out-of-memory condition."""
-    msg = str(error).lower()
-    return "out of memory" in msg or "cuda out of memory" in msg or "mps backend out of memory" in msg or "oom" in msg
