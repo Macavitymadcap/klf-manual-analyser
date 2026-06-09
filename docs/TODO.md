@@ -1,7 +1,6 @@
 # TODO
 
 ## Core pipeline (blocking — can't run without these)
-- `aggregation/aggregate.py` — cross-track statistics + recipe LLM call
 - `pipeline.py` — the orchestrator that wires everything together
 - `cli.py` — the typer entrypoint
 
