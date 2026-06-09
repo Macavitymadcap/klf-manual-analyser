@@ -28,10 +28,10 @@ Error handling (per docs/ERROR_HANDLING.md):
 import logging
 from pathlib import Path
 
+from manual_analyser.audio.device import get_torch_device
 from manual_analyser.db import get_connection
 from manual_analyser.transcription.hooks import _compute_unique_word_ratio, _extract_hook
 from manual_analyser.transcription.types import TranscriptionResult, TranscriptSegment
-from manual_analyser.utils import get_torch_device
 
 logger = logging.getLogger(__name__)
 

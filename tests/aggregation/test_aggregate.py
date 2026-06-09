@@ -6,8 +6,8 @@ import pytest
 
 from manual_analyser.aggregation.aggregate import InsufficientDataError, aggregate
 from manual_analyser.aggregation.types import AggregateReport
+from manual_analyser.audio.decode import utc_now_iso
 from manual_analyser.db import get_connection
-from manual_analyser.utils import utc_now_iso
 
 _PATCH_RECIPE = "manual_analyser.aggregation.recipe.generate_recipe"
 _PATCH_CLUSTERS = "manual_analyser.aggregation.clusters.fetch_clusters"

@@ -32,8 +32,8 @@ from pathlib import Path
 
 import numpy as np
 
+from manual_analyser.audio.device import get_torch_device
 from manual_analyser.db import get_connection
-from manual_analyser.utils import get_torch_device
 
 logger = logging.getLogger(__name__)
 
