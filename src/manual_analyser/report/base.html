@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}KLF Manual Analyser{% endblock %}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Special+Elite&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --zine-bg: #fff;
+    --zine-text: #0a0a0a;
+    --zine-muted: #444;
+    --zine-border: #111;
+    --zine-rule: #ddd;
+    --zine-yellow: #ffe600;
+    --zine-pink: #ff2d6b;
+    --zine-pass: #1a7f37;
+    --zine-fail: #cf222e;
+    --zine-surface: #f0ede6;
+  }
+  body {
+    font-family: 'Special Elite', serif;
+    font-size: 14px;
+    line-height: 1.6;
+    color: var(--zine-text);
+    background: var(--zine-surface);
+    padding: 1.5rem;
+  }
+  .page {
+    background: var(--zine-bg);
+    border: 2px solid var(--zine-border);
+    padding: 1.5rem;
+    max-width: 1100px;
+    margin: 0 auto;
+  }
+  .mono { font-family: 'Share Tech Mono', monospace; }
+  h1 {
+    font-family: 'Special Elite', serif;
+    font-size: 28px;
+    font-weight: 400;
+    text-transform: uppercase;
+    letter-spacing: -0.5px;
+    line-height: 1.1;
+    margin-bottom: 4px;
+  }
+  .sub {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 11px;
+    color: var(--zine-muted);
+    letter-spacing: 0.05em;
+    margin-bottom: 1.5rem;
+  }
+  .zine-header { border-bottom: 4px solid var(--zine-border); padding-bottom: 0.75rem; margin-bottom: 1.25rem; }
+  .section-title {
+    font-family: 'Special Elite', serif;
+    font-size: 15px;
+    font-weight: 400;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    border-bottom: 2px solid var(--zine-border);
+    padding-bottom: 4px;
+    margin: 1.25rem 0 0.75rem;
+  }
+  .metric-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); gap: 8px; margin-bottom: 1.25rem; }
+  .metric { border: 1.5px solid var(--zine-border); padding: 8px 10px; }
+  .metric.accent { background: var(--zine-yellow); }
+  .metric-val { font-family: 'Share Tech Mono', monospace; font-size: 18px; }
+  .metric-lbl { font-family: 'Share Tech Mono', monospace; font-size: 10px; color: var(--zine-muted); margin-top: 2px; text-transform: uppercase; letter-spacing: 0.08em; }
+  .metric.accent .metric-lbl { color: #555; }
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; }
+  .bar-row { display: flex; align-items: center; gap: 8px; margin-bottom: 5px; }
+  .bar-name { font-family: 'Share Tech Mono', monospace; font-size: 11px; width: 120px; flex-shrink: 0; color: var(--zine-muted); }
+  .bar-track { flex: 1; height: 10px; background: #e8e8e8; border: 1px solid #ccc; }
+  .bar-fill { height: 100%; background: var(--zine-border); }
+  .bar-pct { font-family: 'Share Tech Mono', monospace; font-size: 11px; width: 34px; text-align: right; color: var(--zine-muted); }
+  .pass { color: var(--zine-pass); }
+  .fail { color: var(--zine-fail); }
+  .na { color: #aaa; }
+  a { color: var(--zine-text); text-decoration: underline; text-decoration-color: var(--zine-pink); text-underline-offset: 3px; }
+  a:hover { color: var(--zine-pink); }
+  .nav-back {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 11px;
+    color: var(--zine-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    margin-bottom: 1rem;
+    text-decoration: none;
+  }
+  .nav-back:hover { color: var(--zine-text); text-decoration: none; border-bottom: 1px solid var(--zine-muted); }
+  .beat-row { display: flex; align-items: center; gap: 2px; margin-bottom: 3px; }
+  .beat-lbl { font-family: 'Share Tech Mono', monospace; font-size: 10px; color: var(--zine-muted); width: 44px; flex-shrink: 0; text-transform: uppercase; letter-spacing: 0.05em; }
+  .beat-cell { height: 16px; flex: 1; border: 1px solid #ccc; border-radius: 1px; }
+  .beat-on { background: var(--zine-border); border-color: var(--zine-border); }
+  .beat-accent.beat-on { background: var(--zine-yellow); border-color: #b8a000; }
+  .beat-gap { margin-left: 3px; }
+</style>
+{% block extra_head %}{% endblock %}
+</head>
+<body>
+<div class="page">
+{% block content %}{% endblock %}
+</div>
+{% block scripts %}{% endblock %}
+</body>
+</html>

@@ -79,7 +79,7 @@ def analyse_groove(
     try:
         result = _compute_groove(full_wav, short_id)
     except Exception as e:
-        logger.error("[%s] [groove] Analysis failed: %s", short_id, e, exc_info=True)
+        logger.exception("[%s] [groove] Analysis failed: %s", short_id, e, exc_info=True)
         _write_nulls(resolved_db, track_id, short_id)
         return None
 
