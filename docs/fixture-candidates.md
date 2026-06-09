@@ -44,3 +44,18 @@ Duke_Ellington-Jubilee_Stomp.mp3
 ```
 
 Five tracks gives you enough variety without making the first pipeline run take an hour. The Armstrong Hot Five tracks will be fast through Demucs and Whisper; the Bessie Smith will be the slow one (lots of vocal content for Whisper to work through). Run them through `1920s_1930s` mode first — that's the mode designed for these recordings — then if everything works, they also make a legitimately interesting control group for `1988` mode to score against.
+
+## VBR MP3 URLs
+
+- https://archive.org/download/78_nobody-knows-you-when-youre-down-and-out_bessie-smith-edward-allen-cyrus-st-clair-c_gbia3032633a/NOBODY%20KNOWS%20YOU%20WHEN%20YOU%27RE%20DOWN%20AND%20OUT.mp3
+- https://archive.org/download/78_back-water-blues_bessie-smith-james-p-johnson-smith_gbia3032633b/BACK%20WATER%20BLUES%20-%20BESSIE%20SMITH%20-%20James%20P.%20Johnson.mp3
+- https://archive.org/download/78_gimmie-a-pigfoot_bessie-smith-f-newton-j-teagarden-l-berry-b-goodman-b-washington-b_gbia3037975a/GIMMIE%20A%20PIGFOOT%20-%20BESSIE%20SMITH%20-%20F.%20Newton.mp3
+- https://archive.org/download/78_take-me-for-a-buggy-ride_bessie-smith-wilson_gbia3041099b/TAKE%20ME%20FOR%20A%20BUGGY%20RIDE%20-%20BESSIE%20SMITH%20-%20Wilson.mp3
+- https://archive.org/download/78_irish-black-button_louis-armstrong-and-his-hot-five_gbia0297311a/Irish%20Black%20Button%20-%20LOUIS%20ARMSTRONG%20AND%20HIS%20HOT%20FIVE.mp3
+- https://archive.org/download/78_oriental-strut_louis-armstrong-and-his-hot-five-louis-armstrong-johnny-dodds-kid-or_gbia0383898a/ORIENTAL%20STRUT%20-%20LOUIS%20ARMSTRONG%20AND%20HIS%20HOT%20FIVE.mp3
+- https://archive.org/download/78_black-bottom-stomp_jelly-roll-mortons-red-hot-morton_gbia0076785a/Black%20Bottom%20Stomp%20-%20Jelly%20Roll%20Morton%27s%20Red%20Hot.mp3
+- https://archive.org/download/louis-armstrong-louis-armstrong-1923-1927/05Louis%20Armstrong%20%26%20His%20Hot%20Five%20%E2%80%93%20Heebie%20Jeebies.mp3
+
+## Foxtrot
+
+https://archive.org/search?query=mediatype%3A%28audio%29+AND+date%3A%5B1920-01-01+TO+1930-12-31%5D&page=4&and%5B%5D=subject%3A%22Fox+Trot%22
