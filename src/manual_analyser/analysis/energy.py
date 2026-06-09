@@ -97,7 +97,7 @@ def analyse_energy(
     try:
         result = _compute_energy(full_wav, short_id, resolved_db, track_id)
     except Exception as e:
-        logger.error("[%s] [energy] Analysis failed: %s", short_id, e, exc_info=True)
+        logger.exception("[%s] [energy] Analysis failed: %s", short_id, e, exc_info=True)
         _write_nulls(resolved_db, track_id, short_id)
         return None
 

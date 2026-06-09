@@ -110,7 +110,7 @@ def segment_track(
     try:
         boundaries = _detect_boundaries(full_wav, short_id)
     except Exception as e:
-        logger.error("[%s] [structure/pass1] Boundary detection failed: %s", short_id, e, exc_info=True)
+        logger.exception("[%s] [structure/pass1] Boundary detection failed: %s", short_id, e, exc_info=True)
         return []
 
     _write_section_skeletons(resolved_db, track_id, boundaries, short_id)
@@ -255,7 +255,7 @@ def align_sections(
     try:
         labels = _run_alignment(resolved_db, track_id, short_id)
     except Exception as e:
-        logger.error("[%s] [structure/pass2] Alignment failed: %s", short_id, e, exc_info=True)
+        logger.exception("[%s] [structure/pass2] Alignment failed: %s", short_id, e, exc_info=True)
         return None
 
     if labels:

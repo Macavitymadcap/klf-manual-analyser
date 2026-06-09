@@ -131,7 +131,7 @@ def decode_track(
     if not mp3_path.exists():
         raise DecodeSkipError(f"File not found: {mp3_path}")
 
-    if not mp3_path.suffix.lower() == ".mp3":
+    if mp3_path.suffix.lower() != ".mp3":
         raise DecodeSkipError(f"Expected .mp3 file, got: {mp3_path.suffix}")
 
     # ffmpeg check (will raise DecodeAbortError if missing)
