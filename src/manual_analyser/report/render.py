@@ -94,7 +94,7 @@ def _render_track(
         out_path = out_dir / f"track_{track_id}.html"
         out_path.write_text(html, encoding="utf-8")
     except Exception as exc:
-        logger.error("[render] Failed to render track %s: %s", track_id[:8], exc, exc_info=True)
+        logger.exception("[render] Failed to render track %s: %s", track_id[:8], exc, exc_info=True)
 
 
 def _render_summary(agg, track_ids, mode, db_path, out_dir, env) -> Path:
