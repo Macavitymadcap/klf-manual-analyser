@@ -62,8 +62,8 @@ time away.
 **Python 3.11+**, managed with **uv**.
 
 The decision is driven by the MIR ecosystem. Every serious library — librosa,
-essentia, madmom, msaf, Demucs, openai-whisper — targets Python first, and
-several are Python-only. See README for alternatives considered.
+essentia, Demucs, openai-whisper — targets Python first, and several are
+Python-only. See README for alternatives considered.
 
 **uv** is used in place of pip/venv: faster, correct lock files, better native
 dependency resolution.
@@ -74,35 +74,17 @@ dependency resolution.
 
 ### Audio processing
 
-| Library | Purpose | Licence | Compatibility risk |
-|---|---|---|---|
-| ffmpeg (system) | MP3 → WAV decode, normalisation | LGPL 2.1 / GPL 2+ | Low |
-| librosa | BPM, chroma, energy, self-similarity, onset detection | ISC | Low |
-| essentia | Danceability, groove descriptors | AGPL 3.0 | Medium |
-| madmom | Beat grid, drum pattern detection, syncopation, groove feel | BSD 3-Clause | **High** |
-| msaf | Structural segmentation (section boundaries) | MIT | **High** |
+| Library | Purpose | Licence |
+|---|---|---|
+| ffmpeg (system) | MP3 → WAV decode, normalisation | LGPL 2.1 / GPL 2+ |
+| librosa | BPM, chroma, energy, self-similarity, onset detection, beat grid, structural segmentation | ISC |
+| essentia | Danceability, groove descriptors | AGPL 3.0 |
 
-**madmom compatibility warning**: madmom's last release was 2019, officially
-supporting up to Python 3.8. Python 3.11+ compatibility is not guaranteed.
-Test installation before writing any code that depends on it. If madmom will
-not install cleanly, groove feel detection and drum pattern analysis fall back
-to librosa-based onset detection (less sophisticated but functional). See
-fallback plan below.
-
-**msaf compatibility warning**: msaf has not seen active development since
-approximately 2017 and has known issues with newer librosa and scipy versions.
-Test installation before writing `structure.py`. If msaf will not install,
-structural segmentation falls back to `librosa.segment.agglomerative` — lower
-accuracy but reliably available.
-
-**Fallback plan — if madmom fails**:
-- Groove feel: implement swing ratio from librosa onset envelope analysis
-- Drum pattern: use librosa onset detection with frequency band separation
-  (low = kick, mid = snare, high = cymbal) on the drums stem
-
-**Fallback plan — if msaf fails**:
-- Use `librosa.segment.agglomerative` with chroma and MFCC features
-- Lower boundary accuracy; compensate with stronger lyric-based alignment
+librosa is the primary implementation for all MIR analysis. madmom and msaf were
+originally planned as higher-accuracy alternatives but are confirmed broken on
+Python 3.11+ (madmom: `collections.MutableSequence` removed in Python 3.10;
+msaf: `scipy.inf` removed in SciPy 1.11). Neither is used. See
+`klf-mir-dev/references/compatibility.md` for the full investigation.
 
 ### Source separation
 
@@ -224,11 +206,11 @@ flowchart TD
     B --> H[full.wav]
 
     subgraph stage3 [Stage 3 — parallel per track]
-        D --> I[madmom or librosa fallback\ntempo · rhythm · beat grid\ndrum pattern · syncopation\ngroove feel]
+        D --> I[librosa\ntempo · rhythm · beat grid\ndrum pattern · syncopation\ngroove feel]
         E --> J[librosa + essentia\nenergy · harmony · chroma\ndanceability · groove]
         G --> J
         H --> J
-        H --> K[msaf or librosa fallback\nstructural segmentation]
+        H --> K[librosa\nstructural segmentation]
         F --> L[Whisper large-v3\ntranscript + timestamps]
     end
 
@@ -283,8 +265,8 @@ concurrently per track.
 ```mermaid
 flowchart LR
     A[WAV stems] --> B[tempo.py\nbpm · beat_times\ntime_sig · stability]
-    A --> C[rhythm.py\nbeat_grid · kick/snare/hihat\nsyncopation · density\ngroove_feel\nmadmom preferred\nlibrosa fallback]
-    A --> D[structure.py\nsegments · boundaries\nmsaf preferred\nlibrosa fallback]
+    A --> C[rhythm.py\nbeat_grid · kick/snare/hihat\nsyncopation · density\ngroove_feel]
+    A --> D[structure.py\nsegments · boundaries\nlibrosa agglomerative]
     A --> E[energy.py\nrms_profile · loudness\npeak_sections\nverse_chorus_delta]
     A --> F[harmony.py\nkey · mode · chroma\nchord progressions\nnote: ~70% accuracy]
     A --> G[groove.py\nself_similarity\ndanceability · regularity]
@@ -311,7 +293,7 @@ Writes updated section labels back to the `sections` table.
 
 ```mermaid
 flowchart TD
-    A[msaf or librosa segment boundaries] --> D[alignment logic]
+    A[librosa segment boundaries] --> D[alignment logic]
     B[energy per segment] --> D
     C[lyric timestamps + repetition] --> D
     D --> E[label candidates with confidence]
@@ -365,13 +347,13 @@ serving `data/reports/` and `data/stems/` at `localhost:8000`.
 Neither acoustic segmentation alone nor lyric analysis alone reliably labels
 sections. The combination is significantly more robust:
 
-- msaf/librosa gives boundaries but not labels
+- librosa gives boundaries but not labels
 - Energy peaks suggest chorus candidates but can be fooled by loud verses
 - Lyric repetition (same phrase across multiple segments) is a strong chorus signal
 - Low energy + low lyric density + no repeated phrases = strong breakdown signal
 
 Confidence scores reflect how many signals agree. A section labelled "chorus"
-with high lyric repetition AND high energy AND msaf boundary agreement scores
+with high lyric repetition AND high energy AND boundary agreement scores
 0.9+. A section labelled by only one signal scores 0.5 or lower. The LLM is
 explicitly given confidence scores and instructed to treat low-confidence labels
 with scepticism.
@@ -417,8 +399,8 @@ klf-manual-analyser/
 │       │
 │       ├── analysis/
 │       │   ├── tempo.py
-│       │   ├── rhythm.py           # madmom preferred; librosa fallback
-│       │   ├── structure.py        # msaf preferred; librosa fallback
+│       │   ├── rhythm.py           # librosa; onset detection + swing ratio
+│       │   ├── structure.py        # librosa agglomerative; alignment pass
 │       │   ├── energy.py
 │       │   ├── harmony.py
 │       │   └── groove.py

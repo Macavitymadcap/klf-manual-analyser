@@ -1,6 +1,6 @@
 ---
 name: klf-mir-dev
-description: Development assistant for the KLF Manual Analyser project — a Python MIR (Music Information Retrieval) tool that scores MP3s against hit-song criteria from The KLF's 1988 book The Manual. Use this skill whenever working on any part of this codebase: writing analysis modules (librosa, essentia, madmom, msaf), the SQLite schema (db.py), the hybrid structure alignment logic, criteria TOML config files, LLM scoring prompts, the Jinja2 HTML report, or the CLI. Also use for debugging MIR library compatibility issues (madmom Python 3.11, msaf scipy), reviewing criteria logic, or discussing design decisions. The project uses Python 3.11+ with uv, SQLite, optional Qdrant, and Ollama (qwen2.5:14b, nomic-embed-text) running locally on Fedora with an ASUS ROG Strix / RTX 5070 Ti.
+description: Development assistant for the KLF Manual Analyser project — a Python MIR (Music Information Retrieval) tool that scores MP3s against hit-song criteria from The KLF's 1988 book The Manual. Use this skill whenever working on any part of this codebase: writing analysis modules (librosa, essentia), the SQLite schema (db.py), the hybrid structure alignment logic, criteria TOML config files, LLM scoring prompts, the Jinja2 HTML report, or the CLI. Also use for reviewing criteria logic or discussing design decisions. The project uses Python 3.11+ with uv, SQLite, optional Qdrant, and Ollama (qwen2.5:14b, nomic-embed-text) running locally on Fedora with an ASUS ROG Strix / RTX 5070 Ti.
 ---
 
 # KLF Manual Analyser — Development Skill
@@ -15,7 +15,7 @@ Read the relevant reference file before writing any code for a given module.
 A Python CLI tool that:
 1. Accepts a folder of MP3s named `Artist_Name-Song_Title.mp3`
 2. Separates each track into stems (Demucs htdemucs)
-3. Extracts acoustic features (librosa, essentia, madmom/fallback, msaf/fallback)
+3. Extracts acoustic features (librosa, essentia)
 4. Transcribes lyrics (openai-whisper large-v3)
 5. Aligns lyrics with acoustic structure (hybrid section labelling)
 6. Optionally embeds feature summaries (nomic-embed-text → Qdrant)
@@ -59,9 +59,8 @@ Mutually exclusive — validated at load time in `criteria.py`.
 **Qdrant is optional**: always wrap Qdrant calls in try/except; skip gracefully
 if unavailable. Core pipeline works without it.
 
-**madmom and msaf are high-risk**: both may fail to install on Python 3.11.
-Every module using them must have a librosa-based fallback. Test compatibility
-before writing any dependent code.
+**madmom and msaf are dead**: both fail on Python 3.11+ and are not used.
+librosa is the sole MIR implementation throughout. See `references/compatibility.md`.
 
 **Chord detection accuracy**: ~70–75% on modern recordings, much lower on 1920s
 material. Never treat chord data as ground truth. All harmony prompt hints must
@@ -96,7 +95,7 @@ audio player to attach to.
 2. Read `references/schema.md` for the exact DB fields it writes
 3. Read `references/compatibility.md` for library-specific gotchas
 4. Module writes directly to SQLite — no return values to merge
-5. Include fallback if the primary library (madmom/msaf) is unavailable
+5. librosa is the only MIR dependency — no fallback branching needed
 
 ### Writing a scoring prompt
 1. Read `references/criteria.md` for the criterion's `prompt_hint`
@@ -106,8 +105,8 @@ audio player to attach to.
 
 ### Debugging library compatibility
 1. Read `references/compatibility.md` first
-2. Test madmom and msaf import separately before testing together
-3. If a fallback is needed, document it in `references/compatibility.md`
+2. madmom and msaf are confirmed dead — do not attempt to use them
+3. Document any new librosa compatibility findings in `references/compatibility.md`
 
 ---
 
