@@ -1,6 +1,7 @@
 # ---------------------------------------------------------------------------
 # Project data — never commit audio files or derived data
 # ---------------------------------------------------------------------------
+data/
 data/stems/
 data/reports/
 data/manual_analyser.db
