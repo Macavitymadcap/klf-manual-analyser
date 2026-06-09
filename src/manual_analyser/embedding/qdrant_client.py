@@ -1,4 +1,4 @@
-"""embedding/qdrant_client.py — Qdrant upsert and availability check."""
+"""embed/qdrant_client.py — Qdrant upsert and availability check."""
 
 import uuid
 
