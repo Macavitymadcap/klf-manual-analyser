@@ -2,7 +2,6 @@
 
 ## Core pipeline (blocking — can't run without these)
 - `embedding/summarise.py` + `embedding/embed.py` — Qdrant vectorisation (optional at runtime, but the module needs to exist)
-- `scoring/llm.py` — Ollama HTTP calls
 - `aggregation/aggregate.py` — cross-track statistics + recipe LLM call
 - `pipeline.py` — the orchestrator that wires everything together
 - `cli.py` — the typer entrypoint

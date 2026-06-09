@@ -143,7 +143,7 @@ CREATE TABLE IF NOT EXISTS scores (
     track_id     TEXT NOT NULL REFERENCES tracks(track_id),
     mode         TEXT NOT NULL,               -- "1988" | "contemporary" | "1920s_1930s"
     criterion_id TEXT NOT NULL,               -- matches id in criteria TOML
-    score        REAL NOT NULL,               -- 0.0–1.0
+    score        REAL,                        -- 0.0–1.0
     reasoning    TEXT,                        -- LLM explanation; null for deterministic rules
     passed       INTEGER NOT NULL,            -- 1 | 0
     scored_at    TEXT NOT NULL                -- ISO 8601
