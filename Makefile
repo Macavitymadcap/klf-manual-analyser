@@ -38,6 +38,9 @@ install:
 verify:
 	uv run python scripts/verify_libs.py
 
+get-fixtures:
+	./scripts/get-fixtures.sh
+
 # ---------------------------------------------------------------------------
 # Development
 # ---------------------------------------------------------------------------

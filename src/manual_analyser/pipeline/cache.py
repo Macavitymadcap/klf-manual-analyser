@@ -9,7 +9,7 @@ def track_in_db(track_id: str, db_path: Path) -> bool:
     """Return True if a tracks row exists for this track_id."""
     conn = get_connection(db_path)
     try:
-        row = conn.execute("SELECT 1 FROM tracks WHERE track_id = ?", (track_id,)).fetchone()
+        row = conn.execute("SELECT 1 FROM tracks WHERE track_id = ? AND bpm IS NOT NULL", (track_id,)).fetchone()
         return row is not None
     finally:
         conn.close()

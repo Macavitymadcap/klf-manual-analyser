@@ -54,9 +54,9 @@ description = """
 weight = 1.0
 db_field = "tracks.duration"
 rule = "lte"
-threshold = 210
+threshold = 245
 unit = "seconds"
-fail_message = "Track exceeds 3'30\". Radio One will talk over your outro."
+fail_message = "Track exceeds 4'05\". The Manual's 3'30\" rule applies to the 7\" radio edit — full album cuts often run longer."
 
 # ---------------------------------------------------------------------------
 
@@ -136,7 +136,7 @@ weight = 1.0
 db_field = "sections.label"
 rule = "exists"
 value = "breakdown"
-fail_message = "No breakdown section detected. The Manual requires one."
+fail_message = "No breakdown section detected. Note: DJ-tool style drops and filter sweeps may not be detected as breakdowns by the acoustic labeller — this may be a false negative on dance tracks."
 
 # ---------------------------------------------------------------------------
 
@@ -151,7 +151,7 @@ weight = 1.0
 db_field = "sections.label"
 rule = "exists"
 value = "double_chorus"
-fail_message = "No double chorus detected. The breakdown leads nowhere."
+fail_message = "No double chorus detected. Note: extended final choruses that follow a drop structure may not be labelled correctly — verify against the structure criterion LLM score."
 
 # ---------------------------------------------------------------------------
 
@@ -178,12 +178,15 @@ prompt_hint = """
   hook_first_appearance: seconds into the track when it first appears.
   song_name: parsed from the filename.
 
-  Evaluate:
+  Evaluate all four:
   1. Is the hook phrase simple and emotionally direct — not clever, not complex?
      (Love, loss, joy, longing — the most basic human emotions only.)
   2. Does the song title appear in the lyrics, ideally in the chorus?
   3. Is the hook repeated enough times to be genuinely memorable?
-  4. Would this be the part someone hums walking home after one listen?
+  4. Does the hook arrive within 60 seconds? The Manual requires it. Penalise
+     late arrivals (60–90s: -1 point; 90s+: -2 points). If hook_first_appearance
+     is 0.0 and hook_repetition_count is 0, the track is likely instrumental —
+     score 3 with a note that no vocal hook was detected.
 
   Score 0-10.
 """
@@ -205,11 +208,19 @@ prompt_hint = """
   unique_word_ratio: proportion of unique words to total words (0.0–1.0).
   Low ratio (e.g. 0.2–0.3) = heavy repetition = positive signal in this context.
 
-  Also consider whether the lyric content (where transcription is reliable)
-  deals with basic emotions (love, loss, joy, longing) rather than complex or
-  cerebral themes. The Manual explicitly forbids intellectual content in choruses.
+  Handle these cases explicitly:
+  - unique_word_ratio is null or no lyric data: track is likely instrumental or
+    near-instrumental. Score 7 — The Manual does not require lyrics, and a
+    groove-only track with minimal vocals is consistent with the era.
+  - unique_word_ratio 0.0–0.35: heavy repetition, positive signal. Score 7–10.
+  - unique_word_ratio 0.35–0.55: moderate repetition. Score 5–7.
+  - unique_word_ratio above 0.55: too many unique words — suggests a lyric-dense
+    track that may violate the economy principle. Score 2–5.
 
-  Score 0-10. High score = economical, emotionally direct, deliberately repetitive.
+  Also consider whether the lyric content (where detectable) deals with basic
+  emotions rather than complex or cerebral themes.
+
+  Score 0-10. High score = economical, deliberately repetitive, or instrumental.
 """
 
 # ---------------------------------------------------------------------------
@@ -226,17 +237,27 @@ db_fields = [
   "sections.label",
   "chord_progressions.progression",
   "beat_patterns.kick_pattern",
+  "beat_patterns.syncopation_score",
+  "beat_patterns.rhythmic_density",
 ]
 rule = "llm"
 prompt_hint = """
-  You are given chord progressions for verse sections and the kick/bass
-  beat pattern. Evaluate whether the verse sections appear to be driven by
-  a repeating, identifiable bass riff that provides momentum between choruses.
+  You are given chord progressions for verse sections, the kick drum pattern,
+  syncopation score, and rhythmic density.
 
-  Note: automatic chord detection is approximately 70–75% accurate on modern
-  recordings and lower on older material. Treat chord data as approximate.
+  A strong bass riff in 1988 dance pop may be harmonically simple (even a
+  single-note repeated motif) but must be rhythmically identifiable and
+  consistent. Look for:
+  - A kick pattern with a distinctive, repeating shape (not all 1s or all 0s)
+  - Moderate-to-high syncopation (off-beat emphasis is a bass riff signal)
+  - High rhythmic density (the bass is active throughout the verse)
+  - Chord progressions that repeat identically across verse sections
 
-  Score 0-10. High score = clear, driving bass riff in the verse sections.
+  Note: chord detection is approximately 70–75% accurate — treat as approximate.
+  For rhythmically-driven bass riffs (common in house, garage, rare groove),
+  weight the kick pattern and syncopation signals more heavily than chord data.
+
+  Score 0-10. High score = clear, driving, rhythmically distinctive bass riff.
 """
 
 # ---------------------------------------------------------------------------
@@ -253,9 +274,9 @@ weight = 0.75
 db_field = "sections.duration"
 rule = "range"
 threshold_min = 8
-threshold_max = 30
+threshold_max = 45
 unit = "seconds"
-fail_message = "Intro is outside the expected 8–30 second range for the era."
+fail_message = "Intro is outside the expected 8–45 second range for the era. Note: dance tracks legitimately run longer intros than SAW-style pop."
 
 # ---------------------------------------------------------------------------
 
