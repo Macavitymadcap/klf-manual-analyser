@@ -42,9 +42,11 @@ device = '**Device**:\t\t'
 
 if torch.cuda.is_available():
     device += 'cuda'
+
 elif hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
     device += 'mps (Apple Silicon)'
 else:
     device += 'cpu'
 rich.print(Markdown(device + '\n'))
+rich.print(Markdown('**GPU:**\t\t{}'.format(torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'none')))
 rich.print(Markdown('**Full Stack:**\t✅'))

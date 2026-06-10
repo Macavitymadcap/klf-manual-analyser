@@ -1,13 +1,7 @@
 # ---------------------------------------------------------------------------
 # Project data — never commit audio files or derived data
 # ---------------------------------------------------------------------------
-data/stems/
-data/reports/
-data/manual_analyser.db
-data/pipeline.log
-
-# User's input MP3s (if stored locally under data/)
-data/input/
+data/
 
 # ---------------------------------------------------------------------------
 # Python

@@ -5,4 +5,4 @@ EMBED_MODEL = "nomic-embed-text"
 QDRANT_HOST = "localhost"
 QDRANT_PORT = 6333
 QDRANT_COLLECTION = "tracks"
-VECTOR_SIZE = 384
+VECTOR_SIZE = 768

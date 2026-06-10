@@ -194,8 +194,9 @@ def _run_demucs(
     """
     try:
         import torch
+        import soundfile as sf
         from demucs.apply import apply_model
-        from demucs.audio import AudioFile, save_audio
+        from demucs.audio import AudioFile
         from demucs.pretrained import get_model
     except ImportError as e:
         raise SeparateAbortError(f"Could not import Demucs: {e}\nEnsure demucs is installed: uv add demucs") from e
@@ -247,7 +248,9 @@ def _run_demucs(
     try:
         for stem_name, source in zip(model.sources, sources):
             out_path = stem_dir / f"{stem_name}.wav"
-            save_audio(source, str(out_path), samplerate=model.samplerate)
+            # source: (channels, samples) tensor — soundfile expects (samples, channels)
+            audio_np = source.cpu().numpy().T
+            sf.write(str(out_path), audio_np, samplerate=model.samplerate, subtype="PCM_16")
             logger.debug("[%s] [separate] Saved stem: %s", short_id, out_path.name)
     except Exception as e:
         raise SeparateSkipError(f"[{short_id}] Failed to save stems: {e}") from e

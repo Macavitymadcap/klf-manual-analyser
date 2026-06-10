@@ -1,0 +1,215 @@
+{% extends "base.html" %}
+
+{% block title %}{{ artist or "?" }} — {{ song_name or "Track" }} · KLF Manual Analyser{% endblock %}
+
+{% block extra_head %}
+<style>
+  .player { border: 2px solid var(--zine-border); padding: 10px 12px; margin-bottom: 1rem; }
+  .player-label { font-family: 'Share Tech Mono', monospace; font-size: 10px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--zine-muted); margin-bottom: 8px; }
+  .stem-tabs { display: flex; gap: 4px; margin-bottom: 8px; flex-wrap: wrap; }
+  .stem-tab { font-family: 'Share Tech Mono', monospace; font-size: 11px; padding: 3px 10px; border: 1.5px solid var(--zine-border); cursor: pointer; background: transparent; color: var(--zine-text); text-transform: uppercase; letter-spacing: 0.05em; }
+  .stem-tab.active { background: var(--zine-border); color: #fff; }
+  .playbar { display: flex; align-items: center; gap: 10px; }
+  .play-btn { width: 30px; height: 30px; border: 2px solid var(--zine-border); cursor: pointer; background: transparent; color: var(--zine-text); font-size: 12px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
+  .play-btn:hover { background: var(--zine-border); color: #fff; }
+  #progress-bar { flex: 1; }
+  #time-display { font-family: 'Share Tech Mono', monospace; font-size: 11px; color: var(--zine-muted); white-space: nowrap; }
+  .energy-wrap { height: 52px; display: flex; align-items: flex-end; gap: 1px; margin-bottom: 4px; }
+  .e-bar { flex: 1; min-width: 2px; background: #ccc; }
+  .section-tl { display: flex; height: 18px; border: 1px solid #ccc; margin-bottom: 1rem; }
+  .sec-block { display: flex; align-items: center; justify-content: center; font-family: 'Share Tech Mono', monospace; font-size: 8px; color: var(--zine-muted); text-transform: uppercase; letter-spacing: 0.04em; overflow: hidden; border-right: 1px solid #ddd; }
+  .sec-chorus { background: var(--zine-yellow); color: #555; }
+  .sec-breakdown { background: #1a1a1a; color: #888; }
+  .sec-double_chorus { background: var(--zine-pink); color: #fff; }
+  .crit-row { display: flex; align-items: flex-start; gap: 10px; padding: 7px 0; border-bottom: 1px solid var(--zine-rule); }
+  .crit-dot { width: 20px; height: 20px; border: 2px solid var(--zine-border); display: flex; align-items: center; justify-content: center; font-size: 11px; flex-shrink: 0; margin-top: 1px; font-weight: 700; font-family: 'Share Tech Mono', monospace; }
+  .crit-pass { border-color: var(--zine-pass); color: var(--zine-pass); }
+  .crit-fail { background: var(--zine-pink); border-color: var(--zine-fail); color: #fff; }
+  .crit-na { border-color: #ccc; color: #ccc; }
+  .crit-name { font-family: 'Special Elite', serif; font-size: 13px; text-transform: uppercase; letter-spacing: 0.04em; }
+  .crit-reasoning { font-family: 'Share Tech Mono', monospace; font-size: 11px; color: var(--zine-muted); margin-top: 4px; line-height: 1.6; }
+  .crit-score { width: 38px; text-align: right; font-family: 'Share Tech Mono', monospace; font-size: 13px; font-weight: 700; flex-shrink: 0; }
+  .tx-row { display: flex; gap: 10px; padding: 4px 0; border-bottom: 1px solid #f0f0f0; font-family: 'Share Tech Mono', monospace; font-size: 11px; }
+  .tx-time { color: var(--zine-muted); width: 38px; flex-shrink: 0; }
+  .tx-lbl { width: 72px; color: var(--zine-muted); text-align: right; flex-shrink: 0; font-size: 10px; text-transform: uppercase; }
+</style>
+{% endblock %}
+
+{% block content %}
+<a class="nav-back" href="index.html">← Back to summary</a>
+
+<div class="zine-header">
+  <h1>{{ artist or "Unknown artist" }} —<br>{{ song_name or filename }}</h1>
+  <div class="sub">
+    MODE: {{ mode_name }} // SCORE: {{ "%.2f" | format(overall_score) }} // {{ passed_count }}/{{ total_count }} PASSED
+    {% if duration %} // {{ "%d:%02d" | format((duration // 60) | int, (duration % 60) | int) }}{% endif %}
+    {% if bpm %} // {{ bpm | round(1) }} BPM{% endif %}
+    {% if key %} // {{ key | upper }} {{ (mode or "") | upper }}{% endif %}
+    {% if groove_feel %} // {{ groove_feel | upper }}{% endif %}
+  </div>
+</div>
+
+<div class="section-title" style="margin-top:0">Audio player</div>
+<div class="player">
+  <div class="player-label">Source stem</div>
+  <div class="stem-tabs" id="stem-tabs">
+    <button class="stem-tab active" data-src="{{ stem_base_url }}/full.wav">Full mix</button>
+    <button class="stem-tab" data-src="{{ stem_base_url }}/drums.wav">Drums</button>
+    <button class="stem-tab" data-src="{{ stem_base_url }}/bass.wav">Bass</button>
+    <button class="stem-tab" data-src="{{ stem_base_url }}/vocals.wav">Vocals</button>
+    <button class="stem-tab" data-src="{{ stem_base_url }}/other.wav">Other</button>
+  </div>
+  <div class="playbar">
+    <button class="play-btn" id="play-btn" aria-label="Play / pause">▶</button>
+    <input type="range" id="progress-bar" min="0" max="1000" value="0" step="1" style="flex:1">
+    <span id="time-display">0:00 / 0:00</span>
+  </div>
+</div>
+
+<div class="section-title">Energy profile &amp; structure</div>
+<div class="energy-wrap">
+  {% for v in rms_profile %}
+    <div class="e-bar" style="height: {{ (v * 100) | round | int }}%"></div>
+  {% else %}
+    <p class="mono" style="font-size:12px; color:var(--zine-muted)">No energy data.</p>
+  {% endfor %}
+</div>
+{% if sections %}
+<div class="section-tl">
+  {% for s in sections %}
+    <div class="sec-block sec-{{ s.label }}" style="flex: {{ s.duration }}">{{ s.label }}</div>
+  {% endfor %}
+</div>
+<p class="mono" style="font-size:11px; color:var(--zine-muted); margin-bottom:1.5rem; text-transform:uppercase; letter-spacing:0.04em;">
+  {% for s in sections %}{{ s.label }}{% if not loop.last %} → {% endif %}{% endfor %}
+</p>
+{% endif %}
+
+<div class="two-col" style="margin-bottom:1rem">
+  <div>
+    <div class="section-title" style="margin-top:0">Beat pattern</div>
+    {% if kick_pattern %}
+      {% for row_lbl, pattern, accent in [("Kick", kick_pattern, true), ("Snare", snare_pattern, false), ("Hi-hat", hihat_pattern, false)] %}
+        {% if pattern %}
+        <div class="beat-row">
+          <span class="beat-lbl">{{ row_lbl }}</span>
+          {% for i in range(16) %}
+            <div class="beat-cell
+              {%- if pattern[i] == '1' %} beat-on{% if accent %} beat-accent{% endif %}{% endif %}
+              {%- if i % 4 == 0 and i > 0 %} beat-gap{% endif %}"></div>
+          {% endfor %}
+        </div>
+        {% endif %}
+      {% endfor %}
+      <p class="mono" style="font-size:10px; color:var(--zine-muted); margin-top:4px; text-transform:uppercase; letter-spacing:0.05em;">
+        SYNCOPATION: {{ "%.2f" | format(syncopation_score) if syncopation_score else "N/A" }}
+        &nbsp;// DENSITY: {{ "%.2f" | format(rhythmic_density) if rhythmic_density else "N/A" }}
+      </p>
+    {% else %}
+      <p class="mono" style="font-size:12px; color:var(--zine-muted)">No beat pattern data.</p>
+    {% endif %}
+  </div>
+
+  <div>
+    <div class="section-title" style="margin-top:0">Key features</div>
+    <div class="metric-grid" style="grid-template-columns: repeat(3, 1fr); margin-bottom:0.75rem">
+      <div class="metric accent"><div class="metric-val">{{ bpm | round(1) if bpm else "N/A" }}</div><div class="metric-lbl">BPM</div></div>
+      <div class="metric"><div class="metric-val">{{ (key ~ " " ~ mode) if key else "N/A" }}</div><div class="metric-lbl">Key</div></div>
+      <div class="metric"><div class="metric-val">{{ "%.2f" | format(danceability) if danceability else "N/A" }}</div><div class="metric-lbl">Dance</div></div>
+    </div>
+    {% if hook_phrase %}
+    <p class="mono" style="font-size:11px; color:var(--zine-muted)">
+      HOOK: <span style="color:var(--zine-text)">"{{ hook_phrase }}"</span><br>
+      ×{{ hook_repetition_count or "?" }} repetitions
+      {% if hook_first_appearance %} · first at {{ "%d:%02d" | format((hook_first_appearance // 60) | int, (hook_first_appearance % 60) | int) }}{% endif %}
+    </p>
+    {% endif %}
+  </div>
+</div>
+
+<div class="section-title">Criteria</div>
+{% for c in criteria %}
+  <div class="crit-row">
+    {% if c.score is none %}
+      <div class="crit-dot crit-na">?</div>
+    {% elif c.passed %}
+      <div class="crit-dot crit-pass">✓</div>
+    {% else %}
+      <div class="crit-dot crit-fail">✗</div>
+    {% endif %}
+    <div style="flex:1">
+      <div class="crit-name">{{ c.criterion_id }}</div>
+      {% if c.reasoning %}
+        <div class="crit-reasoning">{{ c.reasoning }}</div>
+      {% endif %}
+    </div>
+    <div class="crit-score {% if c.score is none %}na{% elif c.passed %}pass{% else %}fail{% endif %}">
+      {% if c.score is none %}N/A{% else %}{{ "%.2f" | format(c.score) }}{% endif %}
+    </div>
+  </div>
+{% else %}
+  <p class="mono" style="font-size:12px; color:var(--zine-muted)">No scores available.</p>
+{% endfor %}
+
+<div class="section-title">Transcript</div>
+{% if transcript %}
+  {% for line in transcript %}
+    <div class="tx-row">
+      <span class="tx-time">{{ "%d:%02d" | format((line.start // 60) | int, (line.start % 60) | int) }}</span>
+      <span style="flex:1">{{ line.text }}</span>
+      <span class="tx-lbl">{{ line.section_label or "" }}</span>
+    </div>
+  {% endfor %}
+{% else %}
+  <p class="mono" style="font-size:12px; color:var(--zine-muted)">No transcript available.</p>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  const audio = new Audio();
+  const playBtn = document.getElementById('play-btn');
+  const progressBar = document.getElementById('progress-bar');
+  const timeDisplay = document.getElementById('time-display');
+
+  function fmt(s) {
+    return Math.floor(s / 60) + ':' + String(Math.floor(s % 60)).padStart(2, '0');
+  }
+
+  function switchStem(src, tab) {
+    const pos = audio.currentTime;
+    const wasPlaying = !audio.paused;
+    audio.src = src;
+    audio.currentTime = pos;
+    if (wasPlaying) audio.play();
+    document.querySelectorAll('.stem-tab').forEach(t => t.classList.remove('active'));
+    tab.classList.add('active');
+  }
+
+  document.querySelectorAll('.stem-tab').forEach(tab => {
+    tab.addEventListener('click', () => switchStem(tab.dataset.src, tab));
+  });
+
+  const firstTab = document.querySelector('.stem-tab');
+  if (firstTab) switchStem(firstTab.dataset.src, firstTab);
+
+  playBtn.addEventListener('click', () => {
+    if (audio.paused) { audio.play(); playBtn.textContent = '⏸'; }
+    else { audio.pause(); playBtn.textContent = '▶'; }
+  });
+
+  audio.addEventListener('timeupdate', () => {
+    if (!audio.duration) return;
+    progressBar.value = Math.round((audio.currentTime / audio.duration) * 1000);
+    timeDisplay.textContent = fmt(audio.currentTime) + ' / ' + fmt(audio.duration);
+  });
+
+  progressBar.addEventListener('input', () => {
+    if (audio.duration) audio.currentTime = (progressBar.value / 1000) * audio.duration;
+  });
+
+  audio.addEventListener('ended', () => { playBtn.textContent = '▶'; });
+})();
+</script>
+{% endblock %}

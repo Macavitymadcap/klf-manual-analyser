@@ -51,27 +51,26 @@ weight = 1.5
 db_fields = [
   "tracks.bpm",
   "tracks.time_signature",
-  "tracks.groove_feel",
   "tracks.tempo_stability",
 ]
 rule = "llm"
 prompt_hint = """
-  bpm: detected tempo (may be imprecise; no click track on these recordings).
-  time_signature: 3 or 4 (madmom/librosa estimate).
-  groove_feel: "straight", "swung", or "unclear".
-  tempo_stability: 0.0–1.0; low stability is expected and not a failing for the era.
+  Score based on whether the BPM fits a recognised 1920s–30s dance form,
+  using time_signature as a secondary signal. Apply these ranges directly:
 
-  First, identify the most likely intended dance form:
-  - Foxtrot (4/4, 112–136 BPM, smooth, swung)
-  - Charleston (4/4, 180–220 BPM, angular, energetic)
-  - Slow blues / ballad (4/4, 60–90 BPM)
-  - Waltz (3/4, 84–90 BPM)
-  - Other (specify)
+  time_signature=4: score 8–10 if BPM is 112–136 (foxtrot) or 60–90 (slow blues).
+                    Score 5–7 if BPM is 90–112 or 136–160 (borderline foxtrot).
+                    Score 8–10 if BPM is 180–220 (Charleston).
+                    Score 3–5 if BPM is outside all ranges.
+  time_signature=3: score 8–10 if BPM is 84–90 (waltz).
+                    Score 4–6 if BPM is outside waltz range.
 
-  Then evaluate whether the tempo is appropriate for that form. Flag low
-  confidence if tempo_stability is below 0.5 or BPM seems implausible.
+  Low tempo_stability (below 0.5) is expected on these recordings — do not
+  penalise it. If BPM seems implausible (below 50 or above 250), note it and
+  score 5 as neutral.
 
-  Score 0-10.
+  Do not explain your reasoning about dance forms at length. State the form,
+  apply the range check, give the score.
 """
 
 # ---------------------------------------------------------------------------
@@ -89,26 +88,26 @@ weight = 1.5
 db_fields = [
   "tracks.groove_feel",
   "tracks.bpm",
-  "tracks.tempo_stability",
 ]
 rule = "llm"
 prompt_hint = """
-  groove_feel: "straight", "swung", or "unclear".
-  bpm: detected tempo.
-  tempo_stability: 0.0–1.0.
+  IMPORTANT: groove_feel is detected acoustically and has a strong systematic
+  bias toward "straight" on pre-click-track recordings. The swing ratio
+  heuristic is calibrated for modern recordings; elastic 1920s timing causes
+  it to misfire consistently. Treat groove_feel="straight" as weak evidence
+  only — it does not mean the track is not swung.
 
-  For most 1920s–30s genres (foxtrot, slow blues, big band jazz), "swung"
-  is the expected value and should score highly.
+  Instead, score primarily on BPM and genre context:
+  - BPM 60–90 (slow blues) or 112–136 (foxtrot): almost certainly swung —
+    score 7–9 unless there is specific acoustic evidence to the contrary.
+  - BPM 180–220 (Charleston): angular feel expected — score 6–8 regardless
+    of groove_feel.
+  - groove_feel="swung": treat as confirmatory, bump score up by 1.
+  - groove_feel="unclear": neutral, no adjustment.
+  - groove_feel="straight": weak negative signal only — reduce score by at
+    most 1 point unless BPM also falls outside all expected ranges.
 
-  "straight" is acceptable for Charleston and novelty songs — adjust accordingly
-  if the BPM suggests a Charleston tempo (180–220).
-
-  "unclear" should be treated as a neutral score (5/10).
-
-  Note: groove_feel detection on pre-click-track recordings with elastic timing
-  may be imprecise. Low tempo_stability may affect detection accuracy.
-
-  Score 0-10. Swung = high score for most genres.
+  Score 0-10. One sentence of reasoning is sufficient.
 """
 
 # ---------------------------------------------------------------------------
